@@ -217,6 +217,15 @@ class TRAME_PT_panneau(bpy.types.Panel):
         ligne.operator("wm.tool_set_by_id", text="Cote", icon="DRIVER_DISTANCE").name = "bim.trame_cote_tool"
 
         layout.separator()
+        layout.label(text="Matériaux")
+        from trame.bim.module.model.trame_materiaux import famille_de, FAMILLES
+
+        col = layout.column(align=True)
+        for m in sorted(tool.Ifc.get().by_type("IfcMaterial"), key=lambda m: m.Name or ""):
+            col.label(text=f"{m.Name}  —  {FAMILLES[famille_de(m)][0]}", icon="MATERIAL")
+        layout.operator("bim.trame_creer_materiau", icon="ADD")
+
+        layout.separator()
         layout.label(text="Fichier")
         ligne = layout.row(align=True)
         ligne.operator("bim.save_project", text="Enregistrer", icon="FILE_TICK")

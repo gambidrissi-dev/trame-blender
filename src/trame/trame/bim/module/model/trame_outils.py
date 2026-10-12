@@ -22,6 +22,7 @@ import trame.core.geometry
 import trame.core.root
 from trame.bim.module.model import roof as bonsai_toit
 from trame.bim.module.model.slab import DumbSlabGenerator
+from trame.bim.module.model.trame_materiaux import items_materiaux, materiau as materiau_nomme
 from trame.bim.module.model.trame_plan import creer_cote, decalage_vers, geometrie_cote
 from trame.bim.module.model.wall import DumbWallGenerator, DumbWallJoiner
 
@@ -119,18 +120,16 @@ def lire_longueur(saisie: str):
     return valeur if valeur > 0 else None
 
 
-def type_de_mur(epaisseur_m: float) -> ifcopenshell.entity_instance:
-    """Retrouve ou crée le type « Mur N cm » avec une couche de l'épaisseur voulue."""
+def type_de_mur(epaisseur_m: float, nom_materiau: str = "Maçonnerie") -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type « Mur N cm <matériau> » avec une couche de l'épaisseur voulue."""
     f = tool.Ifc.get()
     unit_scale = ifcopenshell.util.unit.calculate_unit_scale(f)
-    nom = f"Mur {epaisseur_m * 100:g} cm"
+    nom = f"Mur {epaisseur_m * 100:g} cm {nom_materiau.lower()}"
     for t in f.by_type("IfcWallType"):
         if t.Name == nom:
             return t
     wall_type = ifcopenshell.api.root.create_entity(f, ifc_class="IfcWallType", name=nom)
-    materiau = next((m for m in f.by_type("IfcMaterial") if m.Name == "Maçonnerie"), None) or (
-        ifcopenshell.api.material.add_material(f, name="Maçonnerie", category="block")
-    )
+    materiau = materiau_nomme(nom_materiau)
     jeu = ifcopenshell.api.material.add_material_set(f, name=nom, set_type="IfcMaterialLayerSet")
     couche = ifcopenshell.api.material.add_layer(f, layer_set=jeu, material=materiau)
     couche.LayerThickness = epaisseur_m / unit_scale
@@ -138,18 +137,18 @@ def type_de_mur(epaisseur_m: float) -> ifcopenshell.entity_instance:
     return wall_type
 
 
-def type_de_dalle(epaisseur_m: float, prefixe: str = "Dalle", predefini: str = "FLOOR") -> ifcopenshell.entity_instance:
-    """Retrouve ou crée le type « Dalle N cm » (ou « Toit-terrasse N cm ») à couches horizontales."""
+def type_de_dalle(
+    epaisseur_m: float, prefixe: str = "Dalle", predefini: str = "FLOOR", nom_materiau: str = "Béton"
+) -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type « Dalle N cm <matériau> » (ou « Toit-terrasse … ») à couches horizontales."""
     f = tool.Ifc.get()
     unit_scale = ifcopenshell.util.unit.calculate_unit_scale(f)
-    nom = f"{prefixe} {epaisseur_m * 100:g} cm"
+    nom = f"{prefixe} {epaisseur_m * 100:g} cm {nom_materiau.lower()}"
     for t in f.by_type("IfcSlabType"):
         if t.Name == nom:
             return t
     slab_type = ifcopenshell.api.root.create_entity(f, ifc_class="IfcSlabType", name=nom, predefined_type=predefini)
-    materiau = next((m for m in f.by_type("IfcMaterial") if m.Name == "Béton"), None) or (
-        ifcopenshell.api.material.add_material(f, name="Béton", category="concrete")
-    )
+    materiau = materiau_nomme(nom_materiau)
     jeu = ifcopenshell.api.material.add_material_set(f, name=nom, set_type="IfcMaterialLayerSet")
     couche = ifcopenshell.api.material.add_layer(f, layer_set=jeu, material=materiau)
     couche.LayerThickness = epaisseur_m / unit_scale
@@ -194,8 +193,8 @@ def type_d_ouverture(classe: str, largeur: float, hauteur: float, modele: str = 
     return nouveau
 
 
-def creer_dalle(points: list, z: float, epaisseur: float, type_=None):
-    gen = DumbSlabGenerator(type_ or type_de_dalle(epaisseur))
+def creer_dalle(points: list, z: float, epaisseur: float, type_=None, nom_materiau: str = "Béton"):
+    gen = DumbSlabGenerator(type_ or type_de_dalle(epaisseur, nom_materiau=nom_materiau))
     gen.file = tool.Ifc.get()
     gen.unit_scale = ifcopenshell.util.unit.calculate_unit_scale(gen.file)
     gen.body_context = ifcopenshell.util.representation.get_context(gen.file, "Model", "Body", "MODEL_VIEW")
@@ -248,18 +247,16 @@ def selectionner_seul(obj) -> None:
     bpy.context.view_layer.objects.active = obj
 
 
-def type_de_poteau(largeur: float, profondeur: float) -> ifcopenshell.entity_instance:
-    """Retrouve ou crée le type « Poteau 30 × 30 » (profil rectangulaire en béton)."""
+def type_de_poteau(largeur: float, profondeur: float, nom_materiau: str = "Béton") -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type « Poteau 30 × 30 <matériau> » (profil rectangulaire)."""
     f = tool.Ifc.get()
     unit_scale = ifcopenshell.util.unit.calculate_unit_scale(f)
-    nom = f"Poteau {largeur * 100:g} × {profondeur * 100:g}"
+    nom = f"Poteau {largeur * 100:g} × {profondeur * 100:g} {nom_materiau.lower()}"
     for t in f.by_type("IfcColumnType"):
         if t.Name == nom:
             return t
     column_type = ifcopenshell.api.root.create_entity(f, ifc_class="IfcColumnType", name=nom, predefined_type="COLUMN")
-    materiau = next((m for m in f.by_type("IfcMaterial") if m.Name == "Béton"), None) or (
-        ifcopenshell.api.material.add_material(f, name="Béton", category="concrete")
-    )
+    materiau = materiau_nomme(nom_materiau)
     profil = f.create_entity(
         "IfcRectangleProfileDef", ProfileName=nom, ProfileType="AREA",
         XDim=largeur / unit_scale, YDim=profondeur / unit_scale,
@@ -271,9 +268,10 @@ def type_de_poteau(largeur: float, profondeur: float) -> ifcopenshell.entity_ins
     return column_type
 
 
-def creer_poteau(x: float, y: float, z: float, largeur: float, profondeur: float, hauteur: float):
+def creer_poteau(x: float, y: float, z: float, largeur: float, profondeur: float, hauteur: float,
+                 nom_materiau: str = "Béton"):
     """Poteau centré sur le point cliqué."""
-    type_ = type_de_poteau(largeur, profondeur)
+    type_ = type_de_poteau(largeur, profondeur, nom_materiau)
     tool.Model.get_model_props().extrusion_depth = hauteur
     bpy.context.scene.cursor.location = (x, y, z)
     selectionner_seul(None)  # sinon Bonsai rattache le poteau à l'objet sélectionné
@@ -315,12 +313,13 @@ def angles_pignons(points: list, forme: str) -> list:
     return [0.0] * n
 
 
-def creer_toit(points: list, z: float, forme: str, pente_deg: float, epaisseur: float, depart: float):
+def creer_toit(points: list, z: float, forme: str, pente_deg: float, epaisseur: float, depart: float,
+               nom_materiau: str = "Béton"):
     """Toit sur le contour dessiné, posé à « depart » mètres au-dessus de l'étage."""
     if points[0] == points[-1]:
         points = points[:-1]
     if forme == "PLAT":
-        return creer_dalle(points, z + depart, epaisseur, type_de_dalle(epaisseur, "Toit-terrasse", "ROOF"))
+        return creer_dalle(points, z + depart, epaisseur, type_de_dalle(epaisseur, "Toit-terrasse", "ROOF", nom_materiau))
     origine = Matrix.Translation((points[0][0], points[0][1], z + depart))
     obj = objet_ifc("Toit", "IfcRoof", origine)
     bpy.ops.bim.add_roof()
@@ -385,8 +384,9 @@ def creer_coupe(depart, arrivee, nom: str, profondeur: float):
     return camera
 
 
-def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, epaisseur: float, hauteur: float):
-    gen = DumbWallGenerator(type_de_mur(epaisseur))
+def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, epaisseur: float, hauteur: float,
+              nom_materiau: str = "Maçonnerie"):
+    gen = DumbWallGenerator(type_de_mur(epaisseur, nom_materiau))
     gen.file = tool.Ifc.get()
     gen.layers = tool.Model.get_material_layer_parameters(gen.relating_type)
     gen.body_context = ifcopenshell.util.representation.get_context(gen.file, "Model", "Body", "MODEL_VIEW")
@@ -402,7 +402,7 @@ def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, e
     return gen.create_wall()
 
 
-def creer_murs(points: list, z: float, epaisseur: float, hauteur: float) -> list:
+def creer_murs(points: list, z: float, epaisseur: float, hauteur: float, nom_materiau: str = "Maçonnerie") -> list:
     """Un mur par segment, raccordés en angle ; chaîne fermée si le dernier point rejoint le premier."""
     # Murs existants dont une extrémité coïncide avec le début ou la fin du tracé : on les raccordera.
     voisins = {}
@@ -414,7 +414,7 @@ def creer_murs(points: list, z: float, epaisseur: float, hauteur: float) -> list
     murs = []
     for a, b in zip(points, points[1:]):
         d = Vector(b) - Vector(a)
-        murs.append(creer_mur(a[0], a[1], z, d.length, math.degrees(math.atan2(d.y, d.x)), epaisseur, hauteur))
+        murs.append(creer_mur(a[0], a[1], z, d.length, math.degrees(math.atan2(d.y, d.x)), epaisseur, hauteur, nom_materiau))
     ferme = len(points) > 3 and (Vector(points[0]) - Vector(points[-1])).length < 1e-6
     paires = zip(murs, murs[1:] + murs[:1]) if ferme else zip(murs, murs[1:])
     for m1, m2 in paires:
@@ -427,7 +427,22 @@ def creer_murs(points: list, z: float, epaisseur: float, hauteur: float) -> list
     return murs
 
 
-class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
+def _choisir_materiau(self, context):
+    self.materiau = self.choix_materiau
+
+
+class _AvecMateriau:
+    """Ajoute le choix du matériau dans la liste du projet ; le dernier choix est mémorisé."""
+
+    choix_materiau: bpy.props.EnumProperty(name="Matériau", items=items_materiaux, update=_choisir_materiau,
+                                           options={"SKIP_SAVE"})
+
+    def preparer_materiau(self):
+        if self.materiau in {m[0] for m in items_materiaux(self, bpy.context)}:
+            self.choix_materiau = self.materiau
+
+
+class TRAME_OT_reglages_mur(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operator):
     bl_idname = "bim.trame_reglages_mur"
     bl_label = "Mur"
     bl_description = "Régler et créer le mur dessiné"
@@ -441,8 +456,10 @@ class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
     # Épaisseur et hauteur sont mémorisées d'un mur à l'autre.
     epaisseur: bpy.props.FloatProperty(name="Épaisseur", unit="LENGTH", default=0.20, min=0.01, max=2)
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.50, min=0.1, max=50)
+    materiau: bpy.props.StringProperty(name="Matériau", default="Maçonnerie")
 
     def invoke(self, context, event):
+        self.preparer_materiau()
         if hauteur := hauteur_etage_courant():
             self.hauteur = hauteur  # comme Archicad : un mur monte jusqu'à l'étage du dessus
         titre = "Mur" if len(self.liste_points()) == 2 else "Murs"
@@ -453,7 +470,7 @@ class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
         col.use_property_split = True
         pts = self.liste_points()
         # Longueur et angle ne se corrigent que pour un mur seul ; une chaîne garde le tracé.
-        props = ("epaisseur", "hauteur", "longueur", "angle") if len(pts) == 2 else ("epaisseur", "hauteur")
+        props = ("choix_materiau", "epaisseur", "hauteur") + (("longueur", "angle") if len(pts) == 2 else ())
         for prop in props:
             col.prop(self, prop)
         if len(pts) > 2:
@@ -467,11 +484,11 @@ class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
         if len(pts) == 2:
             a = math.radians(self.angle)
             pts[1] = (pts[0][0] + self.longueur * math.cos(a), pts[0][1] + self.longueur * math.sin(a))
-        creer_murs(pts, self.z, self.epaisseur, self.hauteur)
+        creer_murs(pts, self.z, self.epaisseur, self.hauteur, self.materiau)
         return {"FINISHED"}
 
 
-class TRAME_OT_reglages_dalle(bpy.types.Operator, tool.Ifc.Operator):
+class TRAME_OT_reglages_dalle(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operator):
     bl_idname = "bim.trame_reglages_dalle"
     bl_label = "Dalle"
     bl_description = "Régler et créer la dalle dessinée"
@@ -480,18 +497,21 @@ class TRAME_OT_reglages_dalle(bpy.types.Operator, tool.Ifc.Operator):
     points: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
     z: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
     epaisseur: bpy.props.FloatProperty(name="Épaisseur", unit="LENGTH", default=0.20, min=0.01, max=2)
+    materiau: bpy.props.StringProperty(name="Matériau", default="Béton")
 
     def invoke(self, context, event):
+        self.preparer_materiau()
         return context.window_manager.invoke_props_dialog(self, title="Dalle", confirm_text="Créer")
 
     def draw(self, context):
         col = self.layout.column()
         col.use_property_split = True
+        col.prop(self, "choix_materiau")
         col.prop(self, "epaisseur")
 
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
-        creer_dalle(pts, self.z, self.epaisseur)
+        creer_dalle(pts, self.z, self.epaisseur, nom_materiau=self.materiau)
         return {"FINISHED"}
 
 
@@ -571,7 +591,7 @@ class TRAME_OT_poser_ouverture(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class TRAME_OT_reglages_poteau(bpy.types.Operator, tool.Ifc.Operator):
+class TRAME_OT_reglages_poteau(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operator):
     bl_idname = "bim.trame_reglages_poteau"
     bl_label = "Poteau"
     bl_description = "Régler et poser le poteau"
@@ -583,8 +603,10 @@ class TRAME_OT_reglages_poteau(bpy.types.Operator, tool.Ifc.Operator):
     largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=0.30, min=0.05, max=3)
     profondeur: bpy.props.FloatProperty(name="Profondeur", unit="LENGTH", default=0.30, min=0.05, max=3)
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.50, min=0.1, max=50)
+    materiau: bpy.props.StringProperty(name="Matériau", default="Béton")
 
     def invoke(self, context, event):
+        self.preparer_materiau()
         if hauteur := hauteur_etage_courant():
             self.hauteur = hauteur
         return context.window_manager.invoke_props_dialog(self, title="Poteau", confirm_text="Créer")
@@ -592,11 +614,11 @@ class TRAME_OT_reglages_poteau(bpy.types.Operator, tool.Ifc.Operator):
     def draw(self, context):
         col = self.layout.column()
         col.use_property_split = True
-        for prop in ("largeur", "profondeur", "hauteur"):
+        for prop in ("choix_materiau", "largeur", "profondeur", "hauteur"):
             col.prop(self, prop)
 
     def _execute(self, context):
-        creer_poteau(self.x, self.y, self.z, self.largeur, self.profondeur, self.hauteur)
+        creer_poteau(self.x, self.y, self.z, self.largeur, self.profondeur, self.hauteur, self.materiau)
         return {"FINISHED"}
 
 
@@ -619,7 +641,7 @@ class TRAME_OT_poser_poteau(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class TRAME_OT_reglages_toit(bpy.types.Operator, tool.Ifc.Operator):
+class TRAME_OT_reglages_toit(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operator):
     bl_idname = "bim.trame_reglages_toit"
     bl_label = "Toit"
     bl_description = "Régler et créer le toit dessiné"
@@ -634,8 +656,10 @@ class TRAME_OT_reglages_toit(bpy.types.Operator, tool.Ifc.Operator):
         name="Hauteur de départ", unit="LENGTH", default=2.50, min=0, max=50,
         description="Hauteur du bas du toit au-dessus de l'étage (en général, la hauteur des murs)",
     )
+    materiau: bpy.props.StringProperty(name="Matériau", default="Béton")
 
     def invoke(self, context, event):
+        self.preparer_materiau()
         return context.window_manager.invoke_props_dialog(self, title="Toit", confirm_text="Créer")
 
     def draw(self, context):
@@ -644,12 +668,14 @@ class TRAME_OT_reglages_toit(bpy.types.Operator, tool.Ifc.Operator):
         col.prop(self, "forme")
         if self.forme != "PLAT":
             col.prop(self, "pente")
+        else:
+            col.prop(self, "choix_materiau")
         col.prop(self, "epaisseur")
         col.prop(self, "depart")
 
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
-        creer_toit(pts, self.z, self.forme, self.pente, self.epaisseur, self.depart)
+        creer_toit(pts, self.z, self.forme, self.pente, self.epaisseur, self.depart, self.materiau)
         return {"FINISHED"}
 
 

@@ -13,7 +13,7 @@ o = tool.Ifc.get_object(f.by_type("IfcWall")[0])
 assert sorted(round(v, 3) for v in o.dimensions) == [0.3, 2.7, 5.0], o.dimensions
 assert round(math.degrees(o.rotation_euler.z)) == 90 and tuple(round(v, 3) for v in o.location) == (1, 2, 0)
 mur = tool.Ifc.get_entity(o)
-assert ue.get_type(mur).Name == "Mur 30 cm" and ue.get_container(mur)
+assert ue.get_type(mur).Name == "Mur 30 cm maçonnerie" and ue.get_container(mur)
 
 # Accroche : les extrémités du mur seul sont proposées comme cibles.
 from trame.bim.module.model.trame_outils import extremites_murs, mur_sous_point
@@ -35,7 +35,7 @@ assert {(20, 0), (24, 0), (24, 3), (20, 3)} <= cibles, cibles
 # Dalle : contour de 4 points, fermée automatiquement, type « Dalle 25 cm ».
 bpy.ops.bim.trame_reglages_dalle(points="20,0;24,0;24,3;20,3", z=0, epaisseur=0.25)
 (dalle,) = f.by_type("IfcSlab")
-assert ue.get_type(dalle).Name == "Dalle 25 cm"
+assert ue.get_type(dalle).Name == "Dalle 25 cm béton"
 o = tool.Ifc.get_object(dalle)
 assert sorted(round(v, 2) for v in o.dimensions) == [0.25, 3.0, 4.0], o.dimensions
 
@@ -80,7 +80,7 @@ assert len(f.by_type("IfcRelConnectsPathElements")) == liaisons + 1
 bpy.ops.bim.trame_reglages_poteau(x=3, y=4, z=0, largeur=0.25, profondeur=0.4, hauteur=2.7)
 (poteau,) = f.by_type("IfcColumn")
 po = tool.Ifc.get_object(poteau)
-assert ue.get_type(poteau).Name == "Poteau 25 × 40"
+assert ue.get_type(poteau).Name == "Poteau 25 × 40 béton"
 assert sorted(round(v, 2) for v in po.dimensions) == [0.25, 0.4, 2.7] and tuple(round(v, 2) for v in po.location[:2]) == (3, 4)
 
 # Toits : deux pans sur 10 × 6 (pignons sur les petits côtés), quatre pans, un pan, terrasse.
@@ -95,7 +95,7 @@ assert [r.PredefinedType for r in f.by_type("IfcRoof")] == ["GABLE_ROOF", "HIP_R
 bpy.ops.bim.trame_reglages_toit(points="0,40;6,40;6,44;0,44", z=0, forme="UN_PAN", pente=15, epaisseur=0.2, depart=2.5)
 assert len(f.by_type("IfcRoof")) == 3
 bpy.ops.bim.trame_reglages_toit(points="0,50;6,50;6,54;0,54", z=0, forme="PLAT", epaisseur=0.3, depart=2.5)
-assert any(ue.get_type(s_).Name == "Toit-terrasse 30 cm" for s_ in f.by_type("IfcSlab"))
+assert any(ue.get_type(s_).Name == "Toit-terrasse 30 cm béton" for s_ in f.by_type("IfcSlab"))
 
 # Escalier : de (2,60) vers (6,60), 1 m de large, 2,70 m en 16 marches, centré sur la ligne.
 bpy.ops.bim.trame_reglages_escalier(points="2,60;6,60", z=0, largeur=1.0, hauteur=2.7, marches=16)
@@ -160,4 +160,21 @@ assert motif(f.by_type("IfcColumn")[0]) == "beton"
 carre = [V((0, 0, 0)), V((1, 0, 0)), V((1, 1, 0)), V((0, 1, 0))]
 segs = hachures(carre, 0, 0.25)
 assert len(segs) == 4 and all(round((b - a).length, 6) == 1 for a, b in segs)
+# Matériaux : défauts présents avec couleur, création d'un matériau bois, mur dans ce matériau, hachure bois.
+from trame.bim.module.model.trame_materiaux import materiaux, famille_de
+noms = {m.Name for m in materiaux()}
+assert {"Maçonnerie", "Béton", "Bois", "Isolant", "Plâtre"} <= noms
+import ifcopenshell.util.element as ue2
+beton = next(m for m in materiaux() if m.Name == "Béton")
+assert famille_de(beton) == "BETON" and beton.HasRepresentation, "couleur 3D absente"
+bpy.ops.bim.trame_creer_materiau(nom="Ossature bois", famille="BOIS", couleur=(0.7, 0.5, 0.3))
+bpy.ops.bim.trame_reglages_mur(points="0,110;4,110", z=0, longueur=4, angle=0, epaisseur=0.15, hauteur=2.5, materiau="Ossature bois")
+mur_bois = max(f.by_type("IfcWall"), key=lambda w: w.id())
+assert ue.get_type(mur_bois).Name == "Mur 15 cm ossature bois" and motif(mur_bois) == "bois"
+bpy.ops.bim.trame_reglages_mur(points="0,112;4,112", z=0, longueur=4, angle=0, epaisseur=0.07, hauteur=2.5, materiau="Plâtre")
+assert motif(max(f.by_type("IfcWall"), key=lambda w: w.id())) == "platre"
+# La couleur du matériau arrive sur l'objet 3D (matériau Blender issu du style IFC).
+ob = tool.Ifc.get_object(mur_bois)
+couleurs = [tuple(round(c, 2) for c in m.diffuse_color[:3]) for m in ob.data.materials if m]
+assert (0.7, 0.5, 0.3) in couleurs, couleurs
 print("TEST OUTILS OK")

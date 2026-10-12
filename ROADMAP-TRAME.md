@@ -35,5 +35,18 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | 15 | Cotation façon Archicad (points, puis placement de la ligne), cotes IFC « DIMENSION » | fait |
 | 16 | Plan : fond blanc, murs/poteaux coupés hachurés par matériau, symboles de portes et fenêtres | fait |
 
+## Phase 2 — fonctionnalités Archicad
+| # | Étape | État |
+|---|-------|------|
+| 17 | Matériaux : créer un matériau (nom, famille de hachure, couleur 3D), le choisir dans les outils | fait |
+| 18 | Calques : calques Archicad par défaut, chaque élément sur son calque, afficher/masquer/verrouiller | |
+| 19 | Vision plan : trait noir sur blanc (vu en traits), étage inférieur en calque de fond, toit du dessus en pointillés | |
+| 20 | Toiture : débord, toit tracé sur le contour des murs | |
+| 21 | Escaliers : en L et en U avec palier | |
+| 22 | Velux : fenêtre de toit posée dans le pan, toit percé | |
+| 23 | Terrain : maillage à partir de points cotés (triangulation), en IFC | |
+| 24 | IA : assistant Trame qui construit à partir d'une demande en français (API Claude) | |
+| 25 | Tests de bout en bout étendus + publication | |
+
 ## Hors périmètre
 Nomenclatures, mise en page de planches.

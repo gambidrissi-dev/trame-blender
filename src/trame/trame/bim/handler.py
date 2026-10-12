@@ -591,6 +591,9 @@ def _demarrage_trame() -> None:
         try:
             if not tool.Ifc.get():
                 bpy.ops.bim.create_project()
+                from trame.bim.module.model.trame_materiaux import materiaux
+
+                materiaux()  # matériaux Trame par défaut, avec leurs couleurs
             for window in bpy.context.window_manager.windows:
                 for area in window.screen.areas:
                     if area.type != "VIEW_3D":

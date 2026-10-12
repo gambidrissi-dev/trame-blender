@@ -162,6 +162,7 @@ MOTIFS = {
     "maconnerie": ((1, 1, 1, 1), [(45, 0.12)], (0.1, 0.1, 0.1, 1)),
     "bois": ((0.96, 0.90, 0.80, 1), [(45, 0.15), (135, 0.15)], (0.45, 0.30, 0.15, 1)),
     "isolant": ((1, 0.97, 0.85, 1), [(135, 0.05)], (0.6, 0.5, 0.2, 1)),
+    "platre": ((0.88, 0.88, 0.88, 1), [], (0, 0, 0, 1)),
     "plein": ((0.12, 0.12, 0.12, 1), [], (0, 0, 0, 1)),
 }
 
@@ -180,6 +181,7 @@ def motif(element) -> str:
         ("maconnerie", ("maçon", "macon", "brique", "brick", "parpaing", "block", "masonry", "stone", "pierre")),
         ("bois", ("bois", "wood", "timber")),
         ("isolant", ("isol", "insulation", "laine")),
+        ("platre", ("plâtre", "platre", "gypsum", "placo")),
     )
     # Le nom choisi par l'archi prime sur la catégorie technique.
     for texte in ((materiau.Name or "").lower(), (getattr(materiau, "Category", "") or "").lower()):
