@@ -19,6 +19,7 @@
 # This file was modified with the assistance of an AI coding tool.
 
 import importlib
+import json
 import os
 from collections.abc import Callable
 from typing import Union
@@ -34,6 +35,12 @@ try:
 except ImportError:
     translations_dict = {}
 cwd = os.path.dirname(os.path.realpath(__file__))
+
+# Traduction française propre à Trame : texte anglais -> texte français, appliquée aux deux contextes de Blender.
+with open(os.path.join(cwd, "..", "traductions_fr.json"), encoding="utf-8") as f:
+    translations_dict.setdefault("fr_FR", {}).update(
+        {(ctx, en): fr for en, fr in json.load(f).items() for ctx in ("*", "Operator")}
+    )
 
 modules = {
     "project": None,
