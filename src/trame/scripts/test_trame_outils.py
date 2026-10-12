@@ -120,7 +120,10 @@ assert tool.Root.get_default_container() == r1 and round(tool.Root.get_default_c
 bpy.ops.bim.trame_reglages_mur(points="0,70;5,70", z=2.8, longueur=5, angle=0, epaisseur=0.2, hauteur=2.5)
 mur_r1 = max(f.by_type("IfcWall"), key=lambda w: w.id())
 assert ue.get_container(mur_r1) == r1 and round(tool.Ifc.get_object(mur_r1).location.z, 2) == 2.8
+from trame.bim.module.model.trame_outils import hauteur_etage_courant
+assert hauteur_etage_courant() is None  # R+1 est le plus haut
 activer_etage(etages()[-1][0])
+assert round(hauteur_etage_courant(), 2) == 2.8  # le RDC monte jusqu'au R+1
 
 # Coupe sur la ligne (0,80)→(10,80) : caméra au milieu, regard vers +Y (à gauche du tracé).
 bpy.ops.bim.trame_reglages_coupe(points="0,80;10,80", nom="Coupe A", profondeur=12)

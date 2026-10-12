@@ -29,6 +29,16 @@ def niveau_etage() -> float:
     return tool.Root.get_default_container_elevation()
 
 
+def hauteur_etage_courant():
+    """Distance entre l'étage actif et celui du dessus (None s'il est le plus haut)."""
+    z = niveau_etage()
+    dessus = [
+        o.location.z for e in tool.Ifc.get().by_type("IfcBuildingStorey")
+        if (o := tool.Ifc.get_object(e)) and o.location.z > z + 1e-3
+    ]
+    return min(dessus) - z if dessus else None
+
+
 def point_sous_souris(context, event, z: float):
     """Projette la souris sur le plan horizontal de l'étage courant."""
     region, rv3d = context.region, context.region_data
@@ -432,6 +442,8 @@ class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.50, min=0.1, max=50)
 
     def invoke(self, context, event):
+        if hauteur := hauteur_etage_courant():
+            self.hauteur = hauteur  # comme Archicad : un mur monte jusqu'à l'étage du dessus
         titre = "Mur" if len(self.liste_points()) == 2 else "Murs"
         return context.window_manager.invoke_props_dialog(self, title=titre, confirm_text="Créer")
 
@@ -572,6 +584,8 @@ class TRAME_OT_reglages_poteau(bpy.types.Operator, tool.Ifc.Operator):
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.50, min=0.1, max=50)
 
     def invoke(self, context, event):
+        if hauteur := hauteur_etage_courant():
+            self.hauteur = hauteur
         return context.window_manager.invoke_props_dialog(self, title="Poteau", confirm_text="Créer")
 
     def draw(self, context):
@@ -651,6 +665,8 @@ class TRAME_OT_reglages_escalier(bpy.types.Operator, tool.Ifc.Operator):
     marches: bpy.props.IntProperty(name="Nombre de marches", default=16, min=2, max=60)
 
     def invoke(self, context, event):
+        if hauteur := hauteur_etage_courant():
+            self.hauteur = hauteur  # l'escalier monte à l'étage du dessus
         self.marches = max(2, round(self.hauteur / 0.17))  # hauteur de marche confortable, ~17 cm
         return context.window_manager.invoke_props_dialog(self, title="Escalier", confirm_text="Créer")
 

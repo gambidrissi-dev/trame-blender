@@ -12,6 +12,12 @@ git rev-parse -q --verify "refs/tags/v$V" >/dev/null && { echo "v$V existe déj�
 BLENDER_PY=/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13
 ZIP=src/trame/dist/trame_py313-$V-macos-arm64.zip
 
+# Tests avant publication (code du dépôt, via le mode développement de Blender).
+B=/Applications/Blender.app/Contents/MacOS/Blender
+$B -b --python src/trame/scripts/precheck.py 2>&1 | grep -q "PRECHECK OK" || { echo "Vérification préalable en échec"; exit 1; }
+$B -b --python src/trame/scripts/test_trame_outils.py 2>&1 | grep -q "TEST OUTILS OK" || { echo "Tests des outils en échec"; exit 1; }
+$B -b --python src/trame/scripts/test_trame_maison.py 2>&1 | grep -q "TEST MAISON OK" || { echo "Test maison R+1 en échec"; exit 1; }
+
 echo $V > src/trame/VERSION
 rm -rf src/trame/build src/trame/dist
 # Ne rien modifier dans le dépôt pendant la fabrication : on compile les fichiers du disque.

@@ -27,7 +27,7 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | 11 | Vue 3D dans une fenêtre à part (un bouton) | fait |
 | 12 | Coupe : 2 clics → vue en coupe | fait |
 | 13 | Enregistrer / ouvrir en IFC depuis le panneau Trame | fait |
-| 14 | Test « maison R+1 » de bout en bout + publication | |
+| 14 | Test « maison R+1 » de bout en bout + publication | fait |
 
 ## Hors périmètre de cette mission
 Cotation, nomenclatures, mise en page de planches, rendu de plan hachuré par matériau en temps réel

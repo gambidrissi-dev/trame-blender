@@ -1,0 +1,33 @@
+INFO:ExportIFC:Starting export
+DEBUG:git.util:sys.platform='darwin', git_executable='git'
+INFO:ExportIFC:Export finished in 0.02 seconds
+INFO:ImportIFC:Starting import
+INFO:ImportIFC:loading file /var/folders/x_/5vd_c29s3cx8w7f2l4yn8qbh0000gn/T/trame_maison_test.ifc
+INFO:ImportIFC:Creating object #1=IfcProject('1M8suNF7H6gvqQAkEVuYOC',$,'Projet',$,$,$,$,(#10,#22),#5)
+INFO:ImportIFC:Creating object #145=IfcWall('3cGRA5VyH2KOB$L8YloVMo',$,'Wall',$,$,#247,#151,$,$)
+INFO:ImportIFC:Creating object #298=IfcSlab('3UtTs$EvDDUg06iLwL$T1H',$,'Slab',$,$,#306,#313,$,$)
+INFO:ImportIFC:Creating object #841=IfcColumn('1fVp$Syj13sAzU6lKKvI9Q',$,'Column',$,$,#849,#853,$,$)
+INFO:ImportIFC:Creating object #571=IfcWindow('3kQK7vlTT4UgU4UJpYRdQN',$,'Window',$,$,#635,#580,$,1.350000023841858,1.2000000476837158,$,$,$)
+INFO:ImportIFC:Creating object #956=IfcWall('0bzfaDshfFHR$8EAbfUsa$',$,'Wall',$,$,#1247,#962,$,$)
+INFO:ImportIFC:Creating object #981=IfcWall('0K0prDkNfCMO4fQtTNIsJM',$,'Wall',$,$,#1252,#987,$,$)
+INFO:ImportIFC:Creating object #930=IfcWall('2dqmuBTNb4o8$7EcLiREC6',$,'Wall',$,$,#1262,#937,$,$)
+INFO:ImportIFC:Creating object #1006=IfcWall('3RCqAtRAL43epVfoCPEXwX',$,'Wall',$,$,#1257,#1012,$,$)
+INFO:ImportIFC:Creating object #95=IfcWall('1EG0fD0gL5qRYU_c30KlZ8',$,'Wall',$,$,#106,#101,$,$)
+INFO:ImportIFC:Creating object #120=IfcWall('0SJqpKkVL1fhZnboCU9bKC',$,'Wall',$,$,#215,#126,$,$)
+INFO:ImportIFC:Creating object #68=IfcWall('2kvGTi0QfDSehlfiPyKY1U',$,'Wall',$,$,#279,#76,$,$)
+INFO:ImportIFC:Creating object #771=IfcWindow('3VajScJNbBCxw5g2ULr7z6',$,'Window',$,$,#835,#780,$,2.0999999046325684,2.4000000953674316,$,$,$)
+INFO:ImportIFC:Creating object #864=IfcStairFlight('3GL9SGxtz1hgNrOOmFCedD',$,'Escalier',$,$,#1237,#922,$,17,16,0.16470587954801671,0.25,.STRAIGHT.)
+INFO:ImportIFC:Creating object #425=IfcDoor('0$qPJTeYn41eoFAfBi7pEH',$,'Door',$,$,#489,#434,$,2.0999999046325684,0.8999999761581421,$,$,$)
+INFO:ImportIFC:Creating object #1154=IfcSlab('0sw4Qp6yL6MwYG83gBKvRY',$,'Slab',$,$,#1267,#1168,$,$)
+INFO:ImportIFC:Creating object #1172=IfcRoof('2pYDLNAxzCOA237hxiDXg1',$,'Toit',$,$,#1272,#1194,$,.GABLE_ROOF.)
+INFO:ImportIFC:Creating object #27=IfcSite('2Q33PHirjFQOJj8Qgp5oey',$,'Terrain',$,$,#50,$,$,$,$,$,$,$,$)
+INFO:ImportIFC:Creating object #33=IfcBuilding('0Kx0tNAu99MOc5L6mQ5H9c',$,'Bâtiment',$,$,#56,$,$,$,$,$,$)
+INFO:ImportIFC:Creating object #39=IfcBuildingStorey('3ZmCVQOU969xIizJQ8QuDe',$,'Rez-de-chaussée',$,$,#62,$,$,$,$)
+INFO:ImportIFC:Creating object #923=IfcBuildingStorey('0Vcu_f6evEcwGe1sEN$pCj',$,'R+1',$,$,#1242,$,$,$,2.799999952316284)
+INFO:ImportIFC:Creating object #317=IfcDoorType('0nfCmXeb988hlnh07LF53x',$,'Porte 90 × 210 battante à gauche',$,$,(#318),(#327,#405,#424),$,$,.DOOR.,.SINGLE_SWING_LEFT.,$,$)
+INFO:ImportIFC:Creating object #293=IfcSlabType('3AF4OZNt1ADQBShlfg7wyE',$,'Dalle 20 cm',$,$,$,$,$,$,.FLOOR.)
+INFO:ImportIFC:Creating object #836=IfcColumnType('01LePU$YrEB8zNa8bWA7od',$,'Poteau 30 × 30',$,$,$,$,$,$,.COLUMN.)
+INFO:ImportIFC:Creating object #63=IfcWallType('2HB9uNCo91veY5NwRwiyIM',$,'Mur 30 cm',$,$,$,$,$,$,.NOTDEFINED.)
+INFO:ImportIFC:Creating object #636=IfcWindowType('3DTnVOhF97V8wb9ceGMXm9',$,'Fenêtre 240 × 210 deux vantaux',$,$,(#637),(#646,#732,#770),$,$,.WINDOW.,.DOUBLE_PANEL_VERTICAL.,$,$)
+INFO:ImportIFC:Creating object #490=IfcWindowType('3xiyWexYb0_811MkuTZMPS',$,'Fenêtre 120 × 135 un vantail',$,$,(#491),(#500,#548,#570),$,$,.WINDOW.,.SINGLE_PANEL.,$,$)
+INFO:ImportIFC:Import finished in 0.09 seconds
