@@ -17,7 +17,7 @@ from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 
 import trame.tool as tool
-from trame.bim.module.model.wall import DumbWallGenerator
+from trame.bim.module.model.wall import DumbWallGenerator, DumbWallJoiner
 
 
 def niveau_etage() -> float:
@@ -81,15 +81,27 @@ def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, e
     return gen.create_wall()
 
 
+def creer_murs(points: list, z: float, epaisseur: float, hauteur: float) -> list:
+    """Un mur par segment, raccordés en angle ; chaîne fermée si le dernier point rejoint le premier."""
+    murs = []
+    for a, b in zip(points, points[1:]):
+        d = Vector(b) - Vector(a)
+        murs.append(creer_mur(a[0], a[1], z, d.length, math.degrees(math.atan2(d.y, d.x)), epaisseur, hauteur))
+    ferme = len(points) > 3 and (Vector(points[0]) - Vector(points[-1])).length < 1e-6
+    paires = zip(murs, murs[1:] + murs[:1]) if ferme else zip(murs, murs[1:])
+    for m1, m2 in paires:
+        DumbWallJoiner().connect(m2, m1)
+    return murs
+
+
 class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
     bl_idname = "bim.trame_reglages_mur"
     bl_label = "Mur"
     bl_description = "Régler et créer le mur dessiné"
     bl_options = {"REGISTER", "UNDO"}
 
-    # Position du clic de départ : fournie par l'outil, jamais affichée.
-    x: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
-    y: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+    # Points cliqués « x,y;x,y;… » : fournis par l'outil, jamais affichés.
+    points: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
     z: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
     longueur: bpy.props.FloatProperty(name="Longueur", unit="LENGTH", min=0.01, options={"SKIP_SAVE"})
     angle: bpy.props.FloatProperty(name="Angle (°)", min=-360, max=360, options={"SKIP_SAVE"})
@@ -98,24 +110,43 @@ class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.50, min=0.1, max=50)
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, title="Mur", confirm_text="Créer le mur")
+        titre = "Mur" if len(self.liste_points()) == 2 else "Murs"
+        return context.window_manager.invoke_props_dialog(self, title=titre, confirm_text="Créer")
 
     def draw(self, context):
         col = self.layout.column()
         col.use_property_split = True
-        for prop in ("epaisseur", "hauteur", "longueur", "angle"):
+        pts = self.liste_points()
+        # Longueur et angle ne se corrigent que pour un mur seul ; une chaîne garde le tracé.
+        props = ("epaisseur", "hauteur", "longueur", "angle") if len(pts) == 2 else ("epaisseur", "hauteur")
+        for prop in props:
             col.prop(self, prop)
+        if len(pts) > 2:
+            col.label(text=f"{len(pts) - 1} murs raccordés")
+
+    def liste_points(self) -> list:
+        return [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
 
     def _execute(self, context):
-        creer_mur(self.x, self.y, self.z, self.longueur, self.angle, self.epaisseur, self.hauteur)
+        pts = self.liste_points()
+        if len(pts) == 2:
+            a = math.radians(self.angle)
+            pts[1] = (pts[0][0] + self.longueur * math.cos(a), pts[0][1] + self.longueur * math.sin(a))
+        creer_murs(pts, self.z, self.epaisseur, self.hauteur)
         return {"FINISHED"}
 
 
 class TRAME_OT_dessiner_mur(bpy.types.Operator):
     bl_idname = "bim.trame_dessiner_mur"
-    bl_label = "Dessiner un mur"
-    bl_description = "Cliquez le point de départ puis le point d'arrivée du mur (Maj : angle par pas de 45°, Échap : annuler)"
+    bl_label = "Dessiner des murs"
+    bl_description = (
+        "Cliquez les points des murs à la suite. Double-clic, Entrée ou clic droit : terminer. "
+        "Clic sur le premier point : fermer. Maj : angle par 45°. Retour arrière : annuler le dernier point. Échap : tout annuler"
+    )
     bl_options = {"REGISTER"}
+
+    AIDE = "Cliquez le point suivant   •   Double-clic / Entrée : terminer   •   Premier point : fermer   •   Maj : 45°   •   ⌫ : dernier point   •   Échap : annuler"
+    RAYON_FERMETURE_PX = 12
 
     @classmethod
     def poll(cls, context):
@@ -123,44 +154,68 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
 
     def invoke(self, context, event):
         self.z = niveau_etage()
-        self.depart = point_sous_souris(context, event, self.z)
-        if self.depart is None:
+        depart = point_sous_souris(context, event, self.z)
+        if depart is None:
             return {"CANCELLED"}
-        self.fin = self.depart.copy()
-        self.poignee = bpy.types.SpaceView3D.draw_handler_add(self.dessiner_ligne, (), "WINDOW", "POST_VIEW")
+        self.points = [depart]
+        self.fin = depart.copy()
+        self.poignee = bpy.types.SpaceView3D.draw_handler_add(self.dessiner_lignes, (), "WINDOW", "POST_VIEW")
         self.poignee_texte = bpy.types.SpaceView3D.draw_handler_add(
             self.dessiner_longueur, (context,), "WINDOW", "POST_PIXEL"
         )
         context.window_manager.modal_handler_add(self)
-        context.workspace.status_text_set("Cliquez le point d'arrivée du mur   •   Maj : angle par 45°   •   Échap : annuler")
+        context.workspace.status_text_set(self.AIDE)
         return {"RUNNING_MODAL"}
+
+    def pres_du_premier_point(self, context, event) -> bool:
+        if len(self.points) < 3:
+            return False
+        p = view3d_utils.location_3d_to_region_2d(context.region, context.region_data, self.points[0])
+        return p is not None and (p - Vector((event.mouse_region_x, event.mouse_region_y))).length < self.RAYON_FERMETURE_PX
 
     def modal(self, context, event):
         context.area.tag_redraw()
         if event.type in {"MIDDLEMOUSE", "WHEELUPMOUSE", "WHEELDOWNMOUSE", "TRACKPADPAN", "TRACKPADZOOM"}:
             return {"PASS_THROUGH"}  # laisser naviguer dans la vue pendant le tracé
         if event.type == "MOUSEMOVE":
-            if p := point_sous_souris(context, event, self.z):
-                self.fin = contraindre(self.depart, p, event.shift)
+            if self.pres_du_premier_point(context, event):
+                self.fin = self.points[0].copy()
+            elif p := point_sous_souris(context, event, self.z):
+                self.fin = contraindre(self.points[-1], p, event.shift)
             return {"RUNNING_MODAL"}
-        if event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS":
+        if event.type == "ESC" and event.value == "PRESS":
             self.terminer(context)
             return {"CANCELLED"}
+        if event.type == "BACK_SPACE" and event.value == "PRESS":
+            if len(self.points) > 1:
+                self.points.pop()
+            return {"RUNNING_MODAL"}
+        if event.type == "LEFTMOUSE" and event.value == "DOUBLE_CLICK":
+            return self.valider(context)
+        if event.type in {"RET", "NUMPAD_ENTER", "RIGHTMOUSE"} and event.value == "PRESS":
+            return self.valider(context)
         if event.type == "LEFTMOUSE" and event.value == "PRESS":
-            d = self.fin - self.depart
-            self.terminer(context)
-            if d.length < 0.01:
-                return {"CANCELLED"}
-            bpy.ops.bim.trame_reglages_mur(
-                "INVOKE_DEFAULT",
-                x=self.depart.x,
-                y=self.depart.y,
-                z=self.z,
-                longueur=round(d.length, 3),
-                angle=round(math.degrees(math.atan2(d.y, d.x)), 2),
-            )
-            return {"FINISHED"}
+            if (self.fin - self.points[-1]).length < 0.01:
+                return {"RUNNING_MODAL"}  # clic au même endroit : ignoré
+            self.points.append(self.fin.copy())
+            if (self.fin - self.points[0]).length < 1e-6:
+                return self.valider(context)  # contour fermé
         return {"RUNNING_MODAL"}
+
+    def valider(self, context):
+        self.terminer(context)
+        if len(self.points) < 2:
+            return {"CANCELLED"}
+        pts = self.points[:]
+        d = pts[1] - pts[0]
+        bpy.ops.bim.trame_reglages_mur(
+            "INVOKE_DEFAULT",
+            points=";".join(f"{p.x:.6f},{p.y:.6f}" for p in pts),
+            z=self.z,
+            longueur=round(d.length, 3),
+            angle=round(math.degrees(math.atan2(d.y, d.x)), 2),
+        )
+        return {"FINISHED"}
 
     def terminer(self, context):
         bpy.types.SpaceView3D.draw_handler_remove(self.poignee, "WINDOW")
@@ -168,17 +223,21 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
         context.workspace.status_text_set(None)
         context.area.tag_redraw()
 
-    def dessiner_ligne(self):
+    def dessiner_lignes(self):
         shader = gpu.shader.from_builtin("UNIFORM_COLOR")
         gpu.state.line_width_set(3)
-        batch = batch_for_shader(shader, "LINES", {"pos": [self.depart, self.fin]})
+        sommets = self.points + [self.fin]
+        segments = [p for a, b in zip(sommets, sommets[1:]) for p in (a, b)]
+        batch = batch_for_shader(shader, "LINES", {"pos": segments})
         shader.uniform_float("color", (0.1, 0.6, 1.0, 1.0))
         batch.draw(shader)
         gpu.state.line_width_set(1)
 
     def dessiner_longueur(self, context):
-        milieu = view3d_utils.location_3d_to_region_2d(context.region, context.region_data, (self.depart + self.fin) / 2)
+        milieu = view3d_utils.location_3d_to_region_2d(
+            context.region, context.region_data, (self.points[-1] + self.fin) / 2
+        )
         if milieu:
             blf.size(0, 16)
             blf.position(0, milieu.x + 10, milieu.y + 10, 0)
-            blf.draw(0, f"{(self.fin - self.depart).length:.2f} m")
+            blf.draw(0, f"{(self.fin - self.points[-1]).length:.2f} m")
