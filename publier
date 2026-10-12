@@ -1,0 +1,27 @@
+#!/bin/zsh
+# Publie une version de Trame : ./publier 0.2.0
+# Fabrique le zip Mac (puces Apple), commite la version, pose le tag et crée la release GitHub.
+set -euo pipefail
+
+V=${1:?Usage : ./publier x.y.z}
+[[ $V =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]] || { echo "Version attendue au format x.y.z"; exit 1; }
+cd "${0:A:h}"
+[[ -z $(git status --porcelain) ]] || { echo "Le dépôt a des modifs non commitées : commite d'abord."; exit 1; }
+git rev-parse -q --verify "refs/tags/v$V" >/dev/null && { echo "v$V existe déjà."; exit 1; }
+
+BLENDER_PY=/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13
+ZIP=src/trame/dist/trame_py313-$V-macos-arm64.zip
+
+echo $V > src/trame/VERSION
+rm -rf src/trame/build src/trame/dist
+# Ne rien modifier dans le dépôt pendant la fabrication : on compile les fichiers du disque.
+( cd src/trame && SSL_CERT_FILE=/etc/ssl/cert.pem make dist PLATFORM=macosm1 PYVERSION=py313 IS_STABLE=TRUE PYTHON=$BLENDER_PY ) > build.log 2>&1 \
+  || { git checkout -- src/trame/VERSION; echo "Échec de fabrication, voir build.log"; tail -20 build.log; exit 1; }
+[[ -f $ZIP ]] || { echo "Zip introuvable : $ZIP"; exit 1; }
+unzip -p $ZIP trame/blender_manifest.toml | grep -q "^version = \"$V\"" || { echo "Le zip ne porte pas la version $V"; exit 1; }
+
+git commit -qm "Trame $V" src/trame/VERSION
+git tag v$V
+git push -q origin main v$V
+gh release create v$V $ZIP --title "Trame $V" --notes "Installation : Blender 5.2 › Préférences › Extensions › Installer depuis le disque › ce zip (Mac, puces Apple)."
+echo "Trame $V publiée."

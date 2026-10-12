@@ -41,6 +41,7 @@ endif
 endif
 
 IS_STABLE:=FALSE
+TRAME_VERSION:=$(shell cat VERSION)
 VERSION:=$(shell cat ../../VERSION)
 VERSION_BASE:=$(shell sed -E 's/[[:alpha:]]+[0-9]+$$//' ../../VERSION)
 VERSION_PYTHON:=$(shell sed 's/alpha/a/' ../../VERSION)
@@ -251,8 +252,8 @@ endif
 
 	cp pyproject.toml build/
 ifeq ($(IS_STABLE), TRUE)
-	$(SED) "s/0.0.0/$(VERSION_SEMVER)/" build/trame/blender_manifest.toml
-	$(SED) 's/version = "0.0.0"/version = "$(VERSION_PYTHON)"/' build/pyproject.toml
+	$(SED) "s/0.0.0/$(TRAME_VERSION)/" build/trame/blender_manifest.toml
+	$(SED) 's/version = "0.0.0"/version = "$(TRAME_VERSION)"/' build/pyproject.toml
 else
 	$(SED) "s/0.0.0/$(VERSION_SEMVER_DAILY)/" build/trame/blender_manifest.toml
 	$(SED) "s/8888888/$(LAST_COMMIT_HASH)/" build/trame/__init__.py
@@ -310,7 +311,7 @@ endif
 	rm -rf build/trame/libs/
 
 ifeq ($(IS_STABLE), TRUE)
-	cd build && zip -r trame_$(PYVERSION)-$(VERSION_SEMVER)-$(BLENDER_PLATFORM).zip ./trame
+	cd build && zip -r trame_$(PYVERSION)-$(TRAME_VERSION)-$(BLENDER_PLATFORM).zip ./trame
 else
 	cd build && zip -r trame_$(PYVERSION)-$(VERSION_SEMVER_DAILY)-$(BLENDER_PLATFORM).zip ./trame
 endif

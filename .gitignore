@@ -148,3 +148,4 @@ src/trame/dist/
 src/trame/trame/bim/data/gantt/jsgantt.*
 src/trame/trame/bim/data/webui/static/js/jquery.min.js
 src/ifctester/ifctester/webapp/
+build.log
