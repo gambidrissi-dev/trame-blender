@@ -36,6 +36,29 @@ def point_sous_souris(context, event, z: float):
     return origine + direction * t
 
 
+def extremites_murs(z: float) -> list:
+    """Extrémités de l'axe de chaque mur du projet, ramenées à la hauteur de l'étage courant."""
+    f = tool.Ifc.get()
+    unit_scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    points = []
+    for mur in f.by_type("IfcWall"):
+        obj = tool.Ifc.get_object(mur)
+        axe = ifcopenshell.util.representation.get_representation(mur, "Plan", "Axis", "GRAPH_VIEW")
+        if not obj or not axe or not axe.Items:
+            continue
+        courbe = axe.Items[0]
+        if courbe.is_a("IfcIndexedPolyCurve"):
+            coords = courbe.Points.CoordList
+        elif courbe.is_a("IfcPolyline"):
+            coords = [p.Coordinates for p in courbe.Points]
+        else:
+            continue
+        for c in (coords[0], coords[-1]):
+            p = obj.matrix_world @ Vector((c[0] * unit_scale, c[1] * unit_scale, 0))
+            points.append(Vector((p.x, p.y, z)))
+    return points
+
+
 def contraindre(depart: Vector, fin: Vector, orthogonal: bool) -> Vector:
     """Maj enfoncée : angle bloqué par pas de 45°, comme dans Archicad."""
     if not orthogonal:
@@ -154,7 +177,9 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
 
     def invoke(self, context, event):
         self.z = niveau_etage()
-        depart = point_sous_souris(context, event, self.z)
+        self.cibles = extremites_murs(self.z)
+        self.points = []
+        depart = self.accroche(context, event) or point_sous_souris(context, event, self.z)
         if depart is None:
             return {"CANCELLED"}
         self.points = [depart]
@@ -166,6 +191,17 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
         context.window_manager.modal_handler_add(self)
         context.workspace.status_text_set(self.AIDE)
         return {"RUNNING_MODAL"}
+
+    def accroche(self, context, event):
+        """Point d'accroche (extrémité de mur ou point déjà cliqué) sous la souris, à quelques pixels près."""
+        souris = Vector((event.mouse_region_x, event.mouse_region_y))
+        meilleur, distance = None, self.RAYON_FERMETURE_PX
+        for cible in self.cibles + self.points[:-1]:
+            p = view3d_utils.location_3d_to_region_2d(context.region, context.region_data, cible)
+            if p is not None and (d := (p - souris).length) < distance:
+                meilleur, distance = cible.copy(), d
+        self.accroche_active = meilleur is not None
+        return meilleur
 
     def pres_du_premier_point(self, context, event) -> bool:
         if len(self.points) < 3:
@@ -180,6 +216,9 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
         if event.type == "MOUSEMOVE":
             if self.pres_du_premier_point(context, event):
                 self.fin = self.points[0].copy()
+                self.accroche_active = True
+            elif cible := self.accroche(context, event):
+                self.fin = cible
             elif p := point_sous_souris(context, event, self.z):
                 self.fin = contraindre(self.points[-1], p, event.shift)
             return {"RUNNING_MODAL"}
@@ -233,7 +272,21 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
         batch.draw(shader)
         gpu.state.line_width_set(1)
 
+    def dessiner_repere(self, context):
+        p = view3d_utils.location_3d_to_region_2d(context.region, context.region_data, self.fin)
+        if p is None:
+            return
+        cercle = [(p.x + 8 * math.cos(a * math.pi / 8), p.y + 8 * math.sin(a * math.pi / 8), 0) for a in range(17)]
+        shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+        gpu.state.line_width_set(2)
+        batch = batch_for_shader(shader, "LINE_STRIP", {"pos": cercle})
+        shader.uniform_float("color", (1.0, 0.55, 0.0, 1.0))
+        batch.draw(shader)
+        gpu.state.line_width_set(1)
+
     def dessiner_longueur(self, context):
+        if getattr(self, "accroche_active", False):
+            self.dessiner_repere(context)
         milieu = view3d_utils.location_3d_to_region_2d(
             context.region, context.region_data, (self.points[-1] + self.fin) / 2
         )

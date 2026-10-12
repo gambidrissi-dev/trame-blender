@@ -14,6 +14,11 @@ assert round(math.degrees(o.rotation_euler.z)) == 90 and tuple(round(v, 3) for v
 mur = tool.Ifc.get_entity(o)
 assert ue.get_type(mur).Name == "Mur 30 cm" and ue.get_container(mur)
 
+# Accroche : les extrémités du mur seul sont proposées comme cibles.
+from trame.bim.module.model.trame_mur import extremites_murs
+cibles = {(round(v.x, 3), round(v.y, 3)) for v in extremites_murs(0)}
+assert {(1, 2), (1, 7)} <= cibles, cibles
+
 # Chaîne ouverte de 3 points : 2 murs, 1 raccord.
 bpy.ops.bim.trame_reglages_mur(points="10,0;14,0;14,3", z=0, epaisseur=0.2, hauteur=2.5)
 assert len(f.by_type("IfcWall")) == 3
@@ -23,4 +28,6 @@ assert len(f.by_type("IfcRelConnectsPathElements")) == 1
 bpy.ops.bim.trame_reglages_mur(points="20,0;24,0;24,3;20,3;20,0", z=0, epaisseur=0.2, hauteur=2.5)
 assert len(f.by_type("IfcWall")) == 7
 assert len(f.by_type("IfcRelConnectsPathElements")) == 5, len(f.by_type("IfcRelConnectsPathElements"))
+cibles = {(round(v.x, 3), round(v.y, 3)) for v in extremites_murs(0)}
+assert {(20, 0), (24, 0), (24, 3), (20, 3)} <= cibles, cibles
 print("TEST MUR OK")
