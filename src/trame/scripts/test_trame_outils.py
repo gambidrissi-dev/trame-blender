@@ -105,4 +105,10 @@ from mathutils import Vector as V
 bb = [eo.matrix_world @ V(c) for c in eo.bound_box]
 assert round(min(v.y for v in bb), 2) == 59.5 and round(max(v.y for v in bb), 2) == 60.5, [v.y for v in bb]
 assert round(max(v.z for v in bb), 2) == 2.7 and round(min(v.x for v in bb), 2) == 2.0
+# Saisie clavier : « 3,5 » mètres dans la direction de la souris.
+from trame.bim.module.model.trame_outils import lire_longueur, point_a_distance
+assert lire_longueur("3,5") == 3.5 and lire_longueur("2.") == 2.0 and lire_longueur("") is None and lire_longueur("0") is None
+p = point_a_distance(V((1, 1, 0)), V((1, 9, 0)), 3.5)
+assert tuple(round(c, 6) for c in p) == (1, 4.5, 0)
+assert tuple(point_a_distance(V((0, 0, 0)), V((0, 0, 0)), 2)) == (2, 0, 0)
 print("TEST OUTILS OK")

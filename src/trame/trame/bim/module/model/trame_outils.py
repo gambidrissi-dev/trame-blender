@@ -90,6 +90,23 @@ def contraindre(depart: Vector, fin: Vector, orthogonal: bool) -> Vector:
     return depart + Vector((math.cos(angle), math.sin(angle), 0)) * d.length
 
 
+def point_a_distance(dernier: Vector, vise: Vector, longueur: float) -> Vector:
+    """Point à « longueur » mètres du dernier point, dans la direction visée par la souris (axe X si aucune)."""
+    d = vise - dernier
+    d.z = 0
+    direction = d.normalized() if d.length > 1e-9 else Vector((1, 0, 0))
+    return dernier + direction * longueur
+
+
+def lire_longueur(saisie: str):
+    """Texte tapé au clavier (« 3,5 » ou « 3.5 ») → mètres ; None si illisible ou nul."""
+    try:
+        valeur = float(saisie.replace(",", "."))
+    except ValueError:
+        return None
+    return valeur if valeur > 0 else None
+
+
 def type_de_mur(epaisseur_m: float) -> ifcopenshell.entity_instance:
     """Retrouve ou crée le type « Mur N cm » avec une couche de l'épaisseur voulue."""
     f = tool.Ifc.get()
@@ -633,7 +650,10 @@ class TRAME_OT_dessiner(bpy.types.Operator):
     )
     bl_options = {"REGISTER"}
 
-    AIDE = "Cliquez le point suivant   •   Double-clic / Entrée : terminer   •   Premier point : fermer   •   Maj : 45°   •   ⌫ : dernier point   •   Échap : annuler"
+    AIDE = (
+        "Cliquez le point suivant   •   Tapez une longueur puis Entrée   •   Double-clic / Entrée : terminer   •   "
+        "Premier point : fermer   •   Maj : 45°   •   ⌫ : dernier point   •   Échap : annuler"
+    )
     RAYON_FERMETURE_PX = 12
 
     element: bpy.props.EnumProperty(
@@ -653,6 +673,7 @@ class TRAME_OT_dessiner(bpy.types.Operator):
             return {"CANCELLED"}
         self.points = [depart]
         self.fin = depart.copy()
+        self.saisie = ""
         self.poignee = bpy.types.SpaceView3D.draw_handler_add(self.dessiner_lignes, (), "WINDOW", "POST_VIEW")
         self.poignee_texte = bpy.types.SpaceView3D.draw_handler_add(
             self.dessiner_longueur, (context,), "WINDOW", "POST_PIXEL"
@@ -694,9 +715,22 @@ class TRAME_OT_dessiner(bpy.types.Operator):
         if event.type == "ESC" and event.value == "PRESS":
             self.terminer(context)
             return {"CANCELLED"}
+        if event.value == "PRESS" and event.unicode and event.unicode in "0123456789.,":
+            self.saisie += event.unicode  # longueur tapée au clavier, comme dans Archicad
+            return {"RUNNING_MODAL"}
         if event.type == "BACK_SPACE" and event.value == "PRESS":
-            if len(self.points) > 1:
+            if self.saisie:
+                self.saisie = self.saisie[:-1]
+            elif len(self.points) > 1:
                 self.points.pop()
+            return {"RUNNING_MODAL"}
+        if event.type in {"RET", "NUMPAD_ENTER"} and event.value == "PRESS" and self.saisie:
+            longueur, self.saisie = lire_longueur(self.saisie), ""
+            if longueur:
+                self.fin = point_a_distance(self.points[-1], self.fin, longueur)
+                self.points.append(self.fin.copy())
+                if self.element == "ESCALIER":
+                    return self.valider(context)
             return {"RUNNING_MODAL"}
         if event.type == "LEFTMOUSE" and event.value == "DOUBLE_CLICK":
             return self.valider(context)
@@ -777,4 +811,5 @@ class TRAME_OT_dessiner(bpy.types.Operator):
         if milieu:
             blf.size(0, 16)
             blf.position(0, milieu.x + 10, milieu.y + 10, 0)
-            blf.draw(0, f"{(self.fin - self.points[-1]).length:.2f} m")
+            texte = f"Longueur : {self.saisie}_ m" if self.saisie else f"{(self.fin - self.points[-1]).length:.2f} m"
+            blf.draw(0, texte)
