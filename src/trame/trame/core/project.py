@@ -46,10 +46,10 @@ def create_project(
         user = project.run_owner_add_person_and_organisation(person=person, organisation=organisation)
         project.run_owner_set_user(user=user)
 
-    project_obj = project.create_empty("My Project")
-    site = project.create_empty("My Site")
-    building = project.create_empty("My Building")
-    storey = project.create_empty("My Storey")
+    project_obj = project.create_empty("Projet")
+    site = project.create_empty("Terrain")
+    building = project.create_empty("Bâtiment")
+    storey = project.create_empty("Rez-de-chaussée")
 
     project.run_root_assign_class(obj=project_obj, ifc_class="IfcProject", should_add_representation=False)
     project.run_unit_assign_scene_units()

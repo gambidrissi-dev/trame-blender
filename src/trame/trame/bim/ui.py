@@ -469,6 +469,11 @@ class BIM_ADDON_preferences(bpy.types.AddonPreferences):
             "It is recommended to keep this `Enabled`"
         ),
     )
+    langue_fr_reglee: BoolProperty(
+        name="Langue française déjà réglée",
+        description="Trame passe Blender en français une seule fois ; on peut ensuite revenir à une autre langue",
+        default=False,
+    )
     activate_workspace: BoolProperty(
         name="Activate BIM Workspace on Startup",
         default=True,

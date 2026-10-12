@@ -23,6 +23,8 @@ import weakref
 from collections.abc import Callable
 from typing import Union
 
+import traceback
+
 import bpy
 import ifcopenshell.api.owner.settings
 import ifcopenshell.util.element
@@ -567,8 +569,46 @@ def _install_viewport_overlays() -> None:
         install_decorator_cache_handlers()
 
 
+def _demarrage_trame() -> None:
+    """Trame : un fichier neuf s'ouvre prêt à dessiner, sans réglage préalable.
+
+    Interface en français (une seule fois), projet IFC créé, vue de dessus, Outil Mur actif.
+    """
+    if bpy.app.background:
+        return
+    preferences = tool.Blender.get_addon_preferences()
+    if not preferences.langue_fr_reglee:
+        view = bpy.context.preferences.view
+        view.language = "fr_FR"
+        view.use_translate_interface = True
+        view.use_translate_tooltips = True
+        preferences.langue_fr_reglee = True
+    if tool.Ifc.get() or bpy.data.is_saved:
+        return
+
+    def preparer():
+        # Différé : au démarrage, les fenêtres de Blender ne sont pas encore prêtes.
+        try:
+            if not tool.Ifc.get():
+                bpy.ops.bim.create_project()
+            for window in bpy.context.window_manager.windows:
+                for area in window.screen.areas:
+                    if area.type != "VIEW_3D":
+                        continue
+                    region = next(r for r in area.regions if r.type == "WINDOW")
+                    with bpy.context.temp_override(window=window, area=area, region=region):
+                        bpy.ops.view3d.view_axis(type="TOP")
+                        bpy.ops.wm.tool_set_by_id(name="bim.wall_tool")
+        except Exception:
+            traceback.print_exc()  # ne jamais bloquer le démarrage de Blender
+        return None
+
+    bpy.app.timers.register(preparer, first_interval=0.5)
+
+
 @persistent
 def load_post(scene):
     _apply_save_file_invariants(scene)
     _apply_user_preferences()
     _install_viewport_overlays()
+    _demarrage_trame()
