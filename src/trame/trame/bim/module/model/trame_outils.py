@@ -1,4 +1,4 @@
-# Trame - outil Mur façon Archicad : clic de départ, clic d'arrivée, puis une fenêtre de réglages.
+# Trame - outils façon Archicad (mur, dalle, porte, fenêtre) : on clique, puis une fenêtre de réglages.
 # This file is part of Trame, derived from Bonsai (GPL-3.0-or-later).
 
 import math
@@ -17,6 +17,7 @@ from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 
 import trame.tool as tool
+from trame.bim.module.model.slab import DumbSlabGenerator
 from trame.bim.module.model.wall import DumbWallGenerator, DumbWallJoiner
 
 
@@ -36,27 +37,45 @@ def point_sous_souris(context, event, z: float):
     return origine + direction * t
 
 
+def axe_mur(mur: ifcopenshell.entity_instance, z: float):
+    """Extrémités (début, fin) de l'axe d'un mur en coordonnées monde, à la hauteur z ; None si inconnu."""
+    obj = tool.Ifc.get_object(mur)
+    axe = ifcopenshell.util.representation.get_representation(mur, "Plan", "Axis", "GRAPH_VIEW")
+    if not obj or not axe or not axe.Items:
+        return None
+    courbe = axe.Items[0]
+    if courbe.is_a("IfcIndexedPolyCurve"):
+        coords = courbe.Points.CoordList
+    elif courbe.is_a("IfcPolyline"):
+        coords = [p.Coordinates for p in courbe.Points]
+    else:
+        return None
+    unit_scale = ifcopenshell.util.unit.calculate_unit_scale(tool.Ifc.get())
+    a, b = (obj.matrix_world @ Vector((c[0] * unit_scale, c[1] * unit_scale, 0)) for c in (coords[0], coords[-1]))
+    return Vector((a.x, a.y, z)), Vector((b.x, b.y, z))
+
+
 def extremites_murs(z: float) -> list:
     """Extrémités de l'axe de chaque mur du projet, ramenées à la hauteur de l'étage courant."""
-    f = tool.Ifc.get()
-    unit_scale = ifcopenshell.util.unit.calculate_unit_scale(f)
-    points = []
-    for mur in f.by_type("IfcWall"):
-        obj = tool.Ifc.get_object(mur)
-        axe = ifcopenshell.util.representation.get_representation(mur, "Plan", "Axis", "GRAPH_VIEW")
-        if not obj or not axe or not axe.Items:
+    return [p for mur in tool.Ifc.get().by_type("IfcWall") if (axe := axe_mur(mur, z)) for p in axe]
+
+
+def mur_sous_point(point: Vector, z: float):
+    """Mur le plus proche du point cliqué (à son épaisseur près) : (mur, distance depuis le début de l'axe)."""
+    meilleur = None
+    for mur in tool.Ifc.get().by_type("IfcWall"):
+        if not (axe := axe_mur(mur, z)):
             continue
-        courbe = axe.Items[0]
-        if courbe.is_a("IfcIndexedPolyCurve"):
-            coords = courbe.Points.CoordList
-        elif courbe.is_a("IfcPolyline"):
-            coords = [p.Coordinates for p in courbe.Points]
-        else:
+        a, b = axe
+        d = b - a
+        if d.length < 1e-6:
             continue
-        for c in (coords[0], coords[-1]):
-            p = obj.matrix_world @ Vector((c[0] * unit_scale, c[1] * unit_scale, 0))
-            points.append(Vector((p.x, p.y, z)))
-    return points
+        t = max(0.0, min(1.0, (point - a).dot(d) / d.length_squared))
+        ecart = (a + d * t - point).length
+        epaisseur = tool.Model.get_material_layer_parameters(ifcopenshell.util.element.get_type(mur) or mur)["thickness"]
+        if ecart <= (epaisseur or 0.3) / 2 + 0.15 and (meilleur is None or ecart < meilleur[2]):
+            meilleur = (mur, t * d.length, ecart)
+    return meilleur[:2] if meilleur else None
 
 
 def contraindre(depart: Vector, fin: Vector, orthogonal: bool) -> Vector:
@@ -85,6 +104,85 @@ def type_de_mur(epaisseur_m: float) -> ifcopenshell.entity_instance:
     couche.LayerThickness = epaisseur_m / unit_scale
     ifcopenshell.api.material.assign_material(f, products=[wall_type], material=jeu)
     return wall_type
+
+
+def type_de_dalle(epaisseur_m: float) -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type « Dalle N cm » (couches horizontales)."""
+    f = tool.Ifc.get()
+    unit_scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    nom = f"Dalle {epaisseur_m * 100:g} cm"
+    for t in f.by_type("IfcSlabType"):
+        if t.Name == nom:
+            return t
+    slab_type = ifcopenshell.api.root.create_entity(f, ifc_class="IfcSlabType", name=nom, predefined_type="FLOOR")
+    materiau = next((m for m in f.by_type("IfcMaterial") if m.Name == "Béton"), None) or (
+        ifcopenshell.api.material.add_material(f, name="Béton", category="concrete")
+    )
+    jeu = ifcopenshell.api.material.add_material_set(f, name=nom, set_type="IfcMaterialLayerSet")
+    couche = ifcopenshell.api.material.add_layer(f, layer_set=jeu, material=materiau)
+    couche.LayerThickness = epaisseur_m / unit_scale
+    ifcopenshell.api.material.assign_material(f, products=[slab_type], material=jeu)
+    return slab_type
+
+
+def type_d_ouverture(classe: str, largeur: float, hauteur: float) -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type paramétrique « Porte 90 × 210 » / « Fenêtre 120 × 135 » de Bonsai."""
+    f = tool.Ifc.get()
+    porte = classe == "IfcDoorType"
+    nom = f"{'Porte' if porte else 'Fenêtre'} {largeur * 100:g} × {hauteur * 100:g}"
+    for t in f.by_type(classe):
+        if t.Name == nom:
+            return t
+    # Les paramètres par défaut de Bonsai servent de gabarit ; affectation directe pour ne pas déclencher ses mises à jour.
+    defauts = getattr(tool.Blender.get_addon_preferences().default_parameters, "door" if porte else "window")
+    defauts["overall_width"], defauts["overall_height"] = largeur, hauteur
+    props = tool.Root.get_root_props()
+    props.ifc_product = "IfcElementType"
+    props.ifc_class = classe
+    props.ifc_predefined_type = "DOOR" if porte else "WINDOW"
+    props.representation_template = "DOOR" if porte else "WINDOW"
+    avant = set(f.by_type(classe))
+    bpy.ops.bim.add_element(skip_dialog=True)
+    (nouveau,) = set(f.by_type(classe)) - avant
+    nouveau.Name = nom
+    return nouveau
+
+
+def creer_dalle(points: list, z: float, epaisseur: float):
+    gen = DumbSlabGenerator(type_de_dalle(epaisseur))
+    gen.file = tool.Ifc.get()
+    gen.unit_scale = ifcopenshell.util.unit.calculate_unit_scale(gen.file)
+    gen.body_context = ifcopenshell.util.representation.get_context(gen.file, "Model", "Body", "MODEL_VIEW")
+    gen.footprint_context = ifcopenshell.util.representation.get_context(gen.file, "Plan", "FootPrint", "SKETCH_VIEW")
+    gen.container = tool.Root.get_default_container()
+    gen.container_obj = tool.Ifc.get_object(gen.container) if gen.container else None
+    gen.depth = epaisseur
+    gen.x_angle = 0
+    gen.location = Vector((points[0][0], points[0][1], z))
+    gen.polyline = [(p[0] - points[0][0], p[1] - points[0][1], 0.0) for p in points]
+    if gen.polyline[0] != gen.polyline[-1]:
+        gen.polyline.append(gen.polyline[0])  # une dalle est toujours fermée
+    return gen.create_slab()
+
+
+def creer_ouverture(classe: str, mur, position: float, z: float, largeur: float, hauteur: float, allege: float):
+    """Pose une porte/fenêtre centrée à « position » mètres du début de l'axe du mur ; Bonsai perce le mur."""
+    type_ = type_d_ouverture(classe, largeur, hauteur)
+    a, b = axe_mur(mur, z)
+    direction = (b - a).normalized()
+    origine = a + direction * (position - largeur / 2)  # l'origine d'une porte Bonsai est son bord gauche
+    origine.z = z + allege
+    tool.Model.get_model_props().rl2 = allege  # hauteur d'allège utilisée par Bonsai pour les fenêtres
+    bpy.context.scene.cursor.location = origine
+    obj_mur = tool.Ifc.get_object(mur)
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    obj_mur.select_set(True)
+    bpy.context.view_layer.objects.active = obj_mur
+    avant = set(tool.Ifc.get().by_type(classe[:-4]))
+    bpy.ops.bim.add_occurrence(relating_type_id=type_.id())
+    (nouvelle,) = set(tool.Ifc.get().by_type(classe[:-4])) - avant
+    return tool.Ifc.get_object(nouvelle)
 
 
 def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, epaisseur: float, hauteur: float):
@@ -159,9 +257,102 @@ class TRAME_OT_reglages_mur(bpy.types.Operator, tool.Ifc.Operator):
         return {"FINISHED"}
 
 
-class TRAME_OT_dessiner_mur(bpy.types.Operator):
-    bl_idname = "bim.trame_dessiner_mur"
-    bl_label = "Dessiner des murs"
+class TRAME_OT_reglages_dalle(bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.trame_reglages_dalle"
+    bl_label = "Dalle"
+    bl_description = "Régler et créer la dalle dessinée"
+    bl_options = {"REGISTER", "UNDO"}
+
+    points: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    z: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+    epaisseur: bpy.props.FloatProperty(name="Épaisseur", unit="LENGTH", default=0.20, min=0.01, max=2)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, title="Dalle", confirm_text="Créer")
+
+    def draw(self, context):
+        col = self.layout.column()
+        col.use_property_split = True
+        col.prop(self, "epaisseur")
+
+    def _execute(self, context):
+        pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
+        creer_dalle(pts, self.z, self.epaisseur)
+        return {"FINISHED"}
+
+
+class _ReglagesOuverture:
+    bl_options = {"REGISTER", "UNDO"}
+    classe = ""
+    avec_allege = False
+
+    mur: bpy.props.IntProperty(options={"HIDDEN", "SKIP_SAVE"})
+    position: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+    z: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, title=self.bl_label, confirm_text="Créer")
+
+    def draw(self, context):
+        col = self.layout.column()
+        col.use_property_split = True
+        for prop in ("largeur", "hauteur") + (("allege",) if self.avec_allege else ()):
+            col.prop(self, prop)
+
+    def _execute(self, context):
+        allege = self.allege if self.avec_allege else 0.0
+        creer_ouverture(self.classe, tool.Ifc.get().by_id(self.mur), self.position, self.z, self.largeur, self.hauteur, allege)
+        return {"FINISHED"}
+
+
+class TRAME_OT_reglages_porte(_ReglagesOuverture, bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.trame_reglages_porte"
+    bl_label = "Porte"
+    bl_description = "Régler et poser la porte"
+    classe = "IfcDoorType"
+    largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=0.90, min=0.3, max=5)
+    hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.10, min=0.5, max=5)
+
+
+class TRAME_OT_reglages_fenetre(_ReglagesOuverture, bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.trame_reglages_fenetre"
+    bl_label = "Fenêtre"
+    bl_description = "Régler et poser la fenêtre"
+    classe = "IfcWindowType"
+    avec_allege = True
+    largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=1.20, min=0.2, max=10)
+    hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=1.35, min=0.2, max=5)
+    allege: bpy.props.FloatProperty(name="Allège", unit="LENGTH", default=0.90, min=0, max=5)
+
+
+class TRAME_OT_poser_ouverture(bpy.types.Operator):
+    bl_idname = "bim.trame_poser_ouverture"
+    bl_label = "Poser une porte ou une fenêtre"
+    bl_description = "Cliquez sur un mur à l'endroit où centrer la porte ou la fenêtre"
+    bl_options = {"REGISTER"}
+
+    element: bpy.props.EnumProperty(items=(("PORTE", "Porte", ""), ("FENETRE", "Fenêtre", "")))
+
+    @classmethod
+    def poll(cls, context):
+        return tool.Ifc.get() is not None and context.area and context.area.type == "VIEW_3D"
+
+    def invoke(self, context, event):
+        z = niveau_etage()
+        point = point_sous_souris(context, event, z)
+        trouve = point and mur_sous_point(point, z)
+        if not trouve:
+            self.report({"WARNING"}, "Cliquez sur un mur pour y poser l'ouverture")
+            return {"CANCELLED"}
+        mur, position = trouve
+        dialogue = bpy.ops.bim.trame_reglages_porte if self.element == "PORTE" else bpy.ops.bim.trame_reglages_fenetre
+        dialogue("INVOKE_DEFAULT", mur=mur.id(), position=position, z=z)
+        return {"FINISHED"}
+
+
+class TRAME_OT_dessiner(bpy.types.Operator):
+    bl_idname = "bim.trame_dessiner"
+    bl_label = "Dessiner des murs ou une dalle"
     bl_description = (
         "Cliquez les points des murs à la suite. Double-clic, Entrée ou clic droit : terminer. "
         "Clic sur le premier point : fermer. Maj : angle par 45°. Retour arrière : annuler le dernier point. Échap : tout annuler"
@@ -170,6 +361,8 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
 
     AIDE = "Cliquez le point suivant   •   Double-clic / Entrée : terminer   •   Premier point : fermer   •   Maj : 45°   •   ⌫ : dernier point   •   Échap : annuler"
     RAYON_FERMETURE_PX = 12
+
+    element: bpy.props.EnumProperty(items=(("MUR", "Mur", ""), ("DALLE", "Dalle", "")))
 
     @classmethod
     def poll(cls, context):
@@ -243,9 +436,17 @@ class TRAME_OT_dessiner_mur(bpy.types.Operator):
 
     def valider(self, context):
         self.terminer(context)
-        if len(self.points) < 2:
-            return {"CANCELLED"}
         pts = self.points[:]
+        if self.element == "DALLE":
+            if len(pts) < 3:
+                self.report({"WARNING"}, "Une dalle demande au moins 3 points")
+                return {"CANCELLED"}
+            bpy.ops.bim.trame_reglages_dalle(
+                "INVOKE_DEFAULT", points=";".join(f"{p.x:.6f},{p.y:.6f}" for p in pts), z=self.z
+            )
+            return {"FINISHED"}
+        if len(pts) < 2:
+            return {"CANCELLED"}
         d = pts[1] - pts[0]
         bpy.ops.bim.trame_reglages_mur(
             "INVOKE_DEFAULT",

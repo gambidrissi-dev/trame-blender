@@ -120,7 +120,7 @@ class WallTool(BimTool):
     bl_widget = None
     # Trame : avec l'outil Mur, un clic commence le tracé d'un mur (comme Archicad) au lieu de sélectionner.
     bl_keymap = (
-        ("bim.trame_dessiner_mur", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": []}),
+        ("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "MUR")]}),
     ) + BimTool.bl_keymap
     ifc_element_type = "IfcWallType"
 
@@ -144,6 +144,8 @@ class SlabTool(BimTool):
     bl_description = "Create and edit slabs, including floor, roof, landing, and baseslab slabs"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.slab")
     bl_widget = None
+    # Trame : un clic utilise l'outil façon Archicad au lieu de sélectionner.
+    bl_keymap = (("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "DALLE")]}),) + BimTool.bl_keymap
     ifc_element_type = "IfcSlabType"
 
 
@@ -166,6 +168,8 @@ class DoorTool(BimTool):
     bl_description = "Create and edit doors, gates, and trap doors"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.door")
     bl_widget = None
+    # Trame : un clic utilise l'outil façon Archicad au lieu de sélectionner.
+    bl_keymap = (("bim.trame_poser_ouverture", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "PORTE")]}),) + BimTool.bl_keymap
     ifc_element_type = "IfcDoorType"
 
 
@@ -177,6 +181,8 @@ class WindowTool(BimTool):
     bl_description = "Create and edit windows, skylights, and lightdomes"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.window")
     bl_widget = None
+    # Trame : un clic utilise l'outil façon Archicad au lieu de sélectionner.
+    bl_keymap = (("bim.trame_poser_ouverture", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "FENETRE")]}),) + BimTool.bl_keymap
     ifc_element_type = "IfcWindowType"
 
 
