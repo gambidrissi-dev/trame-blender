@@ -22,6 +22,7 @@ import trame.core.geometry
 import trame.core.root
 from trame.bim.module.model import roof as bonsai_toit
 from trame.bim.module.model.slab import DumbSlabGenerator
+from trame.bim.module.model.trame_plan import creer_cote, decalage_vers, geometrie_cote
 from trame.bim.module.model.wall import DumbWallGenerator, DumbWallJoiner
 
 
@@ -128,7 +129,7 @@ def type_de_mur(epaisseur_m: float) -> ifcopenshell.entity_instance:
             return t
     wall_type = ifcopenshell.api.root.create_entity(f, ifc_class="IfcWallType", name=nom)
     materiau = next((m for m in f.by_type("IfcMaterial") if m.Name == "Maçonnerie"), None) or (
-        ifcopenshell.api.material.add_material(f, name="Maçonnerie", category="concrete")
+        ifcopenshell.api.material.add_material(f, name="Maçonnerie", category="block")
     )
     jeu = ifcopenshell.api.material.add_material_set(f, name=nom, set_type="IfcMaterialLayerSet")
     couche = ifcopenshell.api.material.add_layer(f, layer_set=jeu, material=materiau)
@@ -719,6 +720,22 @@ class TRAME_OT_reglages_coupe(bpy.types.Operator, tool.Ifc.Operator):
         return {"FINISHED"}
 
 
+class TRAME_OT_creer_cote(bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.trame_creer_cote"
+    bl_label = "Coter"
+    bl_description = "Créer la cote tracée"
+    bl_options = {"REGISTER", "UNDO"}
+
+    points: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    decalage: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+    z: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+
+    def _execute(self, context):
+        pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
+        creer_cote(pts, self.decalage, self.z)
+        return {"FINISHED"}
+
+
 class TRAME_OT_dessiner(bpy.types.Operator):
     bl_idname = "bim.trame_dessiner"
     bl_label = "Dessiner des murs ou une dalle"
@@ -736,7 +753,7 @@ class TRAME_OT_dessiner(bpy.types.Operator):
 
     element: bpy.props.EnumProperty(
         items=(("MUR", "Mur", ""), ("DALLE", "Dalle", ""), ("TOIT", "Toit", ""), ("ESCALIER", "Escalier", ""),
-               ("COUPE", "Coupe", ""))
+               ("COUPE", "Coupe", ""), ("COTE", "Cote", ""))
     )
 
     @classmethod
@@ -782,6 +799,8 @@ class TRAME_OT_dessiner(bpy.types.Operator):
         context.area.tag_redraw()
         if event.type in {"MIDDLEMOUSE", "WHEELUPMOUSE", "WHEELDOWNMOUSE", "TRACKPADPAN", "TRACKPADZOOM"}:
             return {"PASS_THROUGH"}  # laisser naviguer dans la vue pendant le tracé
+        if getattr(self, "phase", "") == "DECALAGE":
+            return self.modal_decalage(context, event)
         if event.type == "MOUSEMOVE":
             if self.pres_du_premier_point(context, event):
                 self.fin = self.points[0].copy()
@@ -825,7 +844,32 @@ class TRAME_OT_dessiner(bpy.types.Operator):
                 return self.valider(context)  # contour fermé
         return {"RUNNING_MODAL"}
 
+    def modal_decalage(self, context, event):
+        """Cote : les points sont choisis, la souris place la ligne de cote, un clic la crée."""
+        if event.type == "MOUSEMOVE":
+            if p := point_sous_souris(context, event, self.z):
+                self.decalage = decalage_vers(self.points_xy(), p)
+        elif event.type == "ESC" and event.value == "PRESS":
+            self.terminer(context)
+            return {"CANCELLED"}
+        elif event.type == "LEFTMOUSE" and event.value == "PRESS":
+            self.terminer(context)
+            texte = ";".join(f"{x:.6f},{y:.6f}" for x, y in self.points_xy())
+            bpy.ops.bim.trame_creer_cote(points=texte, decalage=self.decalage, z=self.z)
+            return {"FINISHED"}
+        return {"RUNNING_MODAL"}
+
+    def points_xy(self) -> list:
+        return [(p.x, p.y) for p in self.points]
+
     def valider(self, context):
+        if self.element == "COTE":
+            if len(self.points) < 2:
+                self.terminer(context)
+                return {"CANCELLED"}
+            self.phase, self.decalage = "DECALAGE", 0.0
+            context.workspace.status_text_set("Placez la ligne de cote, puis cliquez   •   Échap : annuler")
+            return {"RUNNING_MODAL"}
         self.terminer(context)
         pts = self.points[:]
         texte = ";".join(f"{p.x:.6f},{p.y:.6f}" for p in pts)
@@ -863,7 +907,10 @@ class TRAME_OT_dessiner(bpy.types.Operator):
     def dessiner_lignes(self):
         shader = gpu.shader.from_builtin("UNIFORM_COLOR")
         gpu.state.line_width_set(3)
-        sommets = self.points + [self.fin]
+        sommets = self.points + ([] if getattr(self, "phase", "") == "DECALAGE" else [self.fin])
+        if getattr(self, "phase", "") == "DECALAGE":
+            ligne, _ = geometrie_cote(self.points_xy(), self.decalage)
+            sommets = [Vector((p.x, p.y, self.z)) for p in ligne]
         segments = [p for a, b in zip(sommets, sommets[1:]) for p in (a, b)]
         batch = batch_for_shader(shader, "LINES", {"pos": segments})
         shader.uniform_float("color", (0.1, 0.6, 1.0, 1.0))
@@ -883,6 +930,8 @@ class TRAME_OT_dessiner(bpy.types.Operator):
         gpu.state.line_width_set(1)
 
     def dessiner_longueur(self, context):
+        if getattr(self, "phase", "") == "DECALAGE":
+            return
         if getattr(self, "accroche_active", False):
             self.dessiner_repere(context)
         milieu = view3d_utils.location_3d_to_region_2d(

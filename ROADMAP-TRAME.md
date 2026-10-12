@@ -29,6 +29,11 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | 13 | Enregistrer / ouvrir en IFC depuis le panneau Trame | fait |
 | 14 | Test « maison R+1 » de bout en bout + publication | fait |
 
-## Hors périmètre de cette mission
-Cotation, nomenclatures, mise en page de planches, rendu de plan hachuré par matériau en temps réel
-(les murs coupés hachurés existent dans les dessins SVG de Bonsai, pas encore dans la vue).
+## Suite
+| # | Étape | État |
+|---|-------|------|
+| 15 | Cotation façon Archicad (points, puis placement de la ligne), cotes IFC « DIMENSION » | fait |
+| 16 | Plan : fond blanc, murs/poteaux coupés hachurés par matériau, symboles de portes et fenêtres | fait |
+
+## Hors périmètre
+Nomenclatures, mise en page de planches.

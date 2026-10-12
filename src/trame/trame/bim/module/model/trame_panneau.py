@@ -13,7 +13,7 @@ import trame.core.geometry
 import trame.core.root
 import trame.tool as tool
 
-HAUTEUR_COUPE_PLAN = 1.0  # comme Archicad : le plan coupe à 1 m au-dessus de l'étage
+from trame.bim.module.model.trame_plan import HAUTEUR_COUPE_PLAN
 
 OUTILS = (
     ("builtin.select_box", "Sélection", "RESTRICT_SELECT_OFF"),
@@ -48,6 +48,10 @@ def appliquer_coupe_plan(area, z: float, active: bool = True) -> None:
     """Coupe la vue à 1 m au-dessus de l'étage (et juste sous son sol) : on ne voit que l'étage, en plan."""
     rv3d = area.spaces.active.region_3d
     rv3d.use_clip_planes = active
+    # Fond blanc comme une feuille de plan ; la fenêtre 3D, elle, garde le fond de Blender.
+    ombrage = area.spaces.active.shading
+    ombrage.background_type = "VIEWPORT" if active else "THEME"
+    ombrage.background_color = (1, 1, 1)
     if active:
         loin = 1e5
         # Plan (a, b, c, d) : un point reste visible si a·x + b·y + c·z + d ≥ 0.
@@ -144,6 +148,7 @@ def nouvelle_fenetre_3d(context, camera=None) -> None:
         espace = area.spaces.active
         rv3d = espace.region_3d
         rv3d.use_clip_planes = False  # la 3D montre tout le bâtiment
+        espace.shading.background_type = "THEME"
         region = next(r for r in area.regions if r.type == "WINDOW")
         with context.temp_override(window=fenetre, area=area, region=region):
             if camera:
@@ -207,7 +212,9 @@ class TRAME_PT_panneau(bpy.types.Panel):
         ligne = layout.row(align=True)
         ligne.operator("bim.trame_vue_plan", icon="VIEW_ORTHO")
         ligne.operator("bim.trame_ouvrir_3d", icon="VIEW_PERSPECTIVE")
-        layout.operator("wm.tool_set_by_id", text="Coupe", icon="MOD_BOOLEAN").name = "bim.trame_coupe_tool"
+        ligne = layout.row(align=True)
+        ligne.operator("wm.tool_set_by_id", text="Coupe", icon="MOD_BOOLEAN").name = "bim.trame_coupe_tool"
+        ligne.operator("wm.tool_set_by_id", text="Cote", icon="DRIVER_DISTANCE").name = "bim.trame_cote_tool"
 
         layout.separator()
         layout.label(text="Fichier")

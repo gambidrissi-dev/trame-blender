@@ -25,6 +25,8 @@ bpy.ops.bim.trame_reglages_fenetre(mur=mur_nord.id(), position=pos, z=0, largeur
 bpy.ops.bim.trame_reglages_poteau(x=5, y=4, z=0, largeur=0.3, profondeur=0.3, hauteur=2.8)
 bpy.ops.bim.trame_reglages_escalier(points="1,2;5,2", z=0, largeur=1.0, hauteur=2.8, marches=16)
 
+bpy.ops.bim.trame_creer_cote(points="0,0;5,0;10,0", decalage=-1.5, z=0)
+
 # R+1 : murs, plancher, toit deux pans.
 r1 = ajouter_etage("R+1", 2.8)
 activer_etage(r1)
@@ -49,6 +51,8 @@ assert len(g.by_type("IfcRelFillsElement")) == 3 and len(g.by_type("IfcRelVoidsE
 etage_de = lambda e: ue.get_container(e).Name
 assert sorted(etage_de(w) for w in g.by_type("IfcWall")) == ["R+1"] * 4 + ["Rez-de-chaussée"] * 4
 assert etage_de(g.by_type("IfcRoof")[0]) == "R+1"
+(cote,) = [a for a in g.by_type("IfcAnnotation") if a.ObjectType == "DIMENSION"]
+assert etage_de(cote) == "Rez-de-chaussée" and ue.get_pset(cote, "Trame_Cote")["Decalage"] == -1.5
 
 # Réouverture dans Trame.
 bpy.ops.wm.read_homefile(use_empty=True)

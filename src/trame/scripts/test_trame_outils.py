@@ -132,4 +132,32 @@ cam = tool.Ifc.get_object(dessin)
 regard = cam.matrix_world.to_3x3() @ V((0, 0, -1))
 assert dessin.Name == "Coupe A" and tuple(round(c, 2) for c in cam.location[:2]) == (5, 80)
 assert tuple(round(c, 2) for c in regard) == (0, 1, 0) and cam.data.clip_end == 12
+# Cotes : géométrie, décalage vers la souris, annotation IFC.
+from trame.bim.module.model.trame_plan import geometrie_cote, decalage_vers, attaches, texte_longueur, section, hachures, motif
+ligne, n = geometrie_cote([(0, 0), (7, 0), (4, 0)], -1)
+assert [tuple(round(c, 6) for c in p) for p in ligne] == [(0, -1), (4, -1), (7, -1)]
+assert round(decalage_vers([(0, 0), (7, 0)], (3, 2)), 6) == 2
+assert [tuple(round(c, 6) for c in b) for _, b in attaches([(0, 0), (7, 0)], 1.5)] == [(0, 1.5), (7, 1.5)]
+assert texte_longueur(3.456) == "3,46"
+bpy.ops.bim.trame_creer_cote(points="0,90;4,90;7,90", decalage=-1, z=0)
+(cote,) = [a for a in f.by_type("IfcAnnotation") if a.ObjectType == "DIMENSION"]
+assert ue.get_pset(cote, "Trame_Cote")["Decalage"] == -1 and ue.get_container(cote) == tool.Root.get_default_container()
+assert len(tool.Ifc.get_object(cote).data.vertices) == 3
+
+# Murs coupés : section d'un mur de 5 m × 20 cm à 1 m = 1 contour de 1 m² ; avec une porte = 2 contours.
+def aire(c):
+    return abs(sum(a.x * b.y - b.x * a.y for a, b in zip(c, c[1:] + c[:1]))) / 2
+bpy.ops.bim.trame_reglages_mur(points="0,100;5,100", z=0, longueur=5, angle=0, epaisseur=0.2, hauteur=2.5)
+mur_c = max(f.by_type("IfcWall"), key=lambda w: w.id())
+contours = section(tool.Ifc.get_object(mur_c), 1.0)
+assert len(contours) == 1 and round(aire(contours[0]), 3) == 1.0, [aire(c) for c in contours]
+assert motif(mur_c) == "maconnerie"
+mur_c2, pos = mur_sous_point(V((2.5, 100.05, 0)), 0)
+bpy.ops.bim.trame_reglages_porte(mur=mur_c2.id(), position=pos, z=0, largeur=0.9, hauteur=2.1)
+contours = section(tool.Ifc.get_object(mur_c), 1.0)
+assert len(contours) == 2, len(contours)
+assert motif(f.by_type("IfcColumn")[0]) == "beton"
+carre = [V((0, 0, 0)), V((1, 0, 0)), V((1, 1, 0)), V((0, 1, 0))]
+segs = hachures(carre, 0, 0.25)
+assert len(segs) == 4 and all(round((b - a).length, 6) == 1 for a, b in segs)
 print("TEST OUTILS OK")

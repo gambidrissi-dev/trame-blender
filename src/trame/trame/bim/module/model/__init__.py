@@ -40,6 +40,7 @@ from . import (
     profile,
     trame_outils,
     trame_panneau,
+    trame_plan,
     prop,
     railing,
     roof,
@@ -99,6 +100,7 @@ classes = (
     trame_outils.TRAME_OT_reglages_toit,
     trame_outils.TRAME_OT_reglages_escalier,
     trame_outils.TRAME_OT_reglages_coupe,
+    trame_outils.TRAME_OT_creer_cote,
     trame_panneau.TRAME_OT_activer_etage,
     trame_panneau.TRAME_OT_ajouter_etage,
     trame_panneau.TRAME_OT_vue_plan,
@@ -344,7 +346,8 @@ tools: tuple[ToolsData, ...] = (
     ToolsData(workspace.WindowTool, {"bim.door_tool"}, False, False),
     ToolsData(workspace.StairFlightTool, {"bim.window_tool"}, False, False),
     ToolsData(workspace.TrameCoupeTool, {"bim.stair_flight_tool"}, False, False),
-    ToolsData(workspace.RailingTool, {"bim.trame_coupe_tool"}, True, True),
+    ToolsData(workspace.TrameCoteTool, {"bim.trame_coupe_tool"}, False, False),
+    ToolsData(workspace.RailingTool, {"bim.trame_cote_tool"}, True, True),
     ToolsData(workspace.RampFlightTool, {"bim.railing_tool"}, False, False),
     ToolsData(workspace.BeamTool, {"bim.ramp_flight_tool"}, False, False),
     ToolsData(workspace.MemberTool, {"bim.beam_tool"}, False, False),
@@ -390,6 +393,7 @@ def register():
     bpy.app.handlers.load_post.append(handler.load_post)
 
     workspace.load_custom_icons()
+    trame_plan.installer()  # cotes et murs hachurés dans la vue en plan
 
 
 def unregister():
@@ -398,6 +402,7 @@ def unregister():
     # before the rest of unregister so those handlers can't fire against
     # half-unloaded module state.
     opening.DecorationsHandler.uninstall()
+    trame_plan.desinstaller()
 
     # Network path overlays attach SpaceView3D draw handlers on toggle;
     # uninstall here so addon disable / Blender shutdown doesn't leak them.

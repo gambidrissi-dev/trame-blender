@@ -138,6 +138,19 @@ class TrameCoupeTool(WorkSpaceTool):
     )
 
 
+class TrameCoteTool(WorkSpaceTool):
+    bl_space_type = "VIEW_3D"
+    bl_context_mode = "OBJECT"
+    bl_idname = "bim.trame_cote_tool"
+    bl_label = "Outil Cote"
+    bl_description = "Cliquez les points à coter, Entrée ou double-clic, puis cliquez où placer la ligne de cote"
+    bl_icon = "ops.sequencer.blade"
+    bl_widget = None
+    bl_keymap = (
+        ("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "COTE")]}),
+    )
+
+
 class RailingTool(BimTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"

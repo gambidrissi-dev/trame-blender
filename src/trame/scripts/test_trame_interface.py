@@ -20,21 +20,26 @@ def verifier():
             if hasattr(premier, "idname"):
                 ids.append(premier.idname)
         archi = [i for i in ids if i in ("bim.wall_tool", "bim.slab_tool", "bim.roof_tool", "bim.column_tool",
-                                           "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_coupe_tool")]
+                                           "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_coupe_tool",
+                                           "bim.trame_cote_tool")]
         if archi != ["bim.wall_tool", "bim.slab_tool", "bim.roof_tool", "bim.column_tool",
-                     "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_coupe_tool"]:
+                     "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_coupe_tool",
+                     "bim.trame_cote_tool"]:
             erreurs.append(f"boîte à outils : {archi}")
         # Vue en plan coupée à 1 m.
         bpy.ops.bim.trame_vue_plan()
         rv3d = area.spaces.active.region_3d
         if not rv3d.use_clip_planes or round(rv3d.clip_planes[5][3], 2) != 1.0:
             erreurs.append("plan non coupé à 1 m")
+        if tuple(area.spaces.active.shading.background_color) != (1, 1, 1):
+            erreurs.append("fond du plan non blanc")
         # 3D dans une fenêtre à part, non coupée.
         n = len(bpy.context.window_manager.windows)
         bpy.ops.bim.trame_ouvrir_3d()
         fen3d = bpy.context.window_manager.windows[-1]
         a3d = next(a for a in fen3d.screen.areas if a.type == "VIEW_3D")
-        if len(bpy.context.window_manager.windows) != n + 1 or a3d.spaces.active.region_3d.use_clip_planes:
+        if (len(bpy.context.window_manager.windows) != n + 1 or a3d.spaces.active.region_3d.use_clip_planes
+                or a3d.spaces.active.shading.background_type != "THEME"):
             erreurs.append("fenêtre 3D")
         # Coupe : fenêtre à part qui regarde par la caméra de coupe.
         bpy.ops.bim.trame_reglages_coupe(points="0,0;8,0", nom="Coupe test", profondeur=10)
@@ -42,6 +47,18 @@ def verifier():
         acoupe = next(a for a in fencoupe.screen.areas if a.type == "VIEW_3D")
         if acoupe.spaces.active.region_3d.view_perspective != "CAMERA" or acoupe.spaces.active.camera.name != "Coupe test":
             erreurs.append("fenêtre de coupe")
+    # Plan : un mur, un poteau et une cote, puis on force le dessin de la vue (hachures + cotes).
+    from trame.bim.module.model.trame_plan import sections_etage, _poignees
+    with bpy.context.temp_override(window=fenetre, area=area, region=region):
+        bpy.ops.bim.trame_reglages_mur(points="0,0;6,0;6,4", z=0, epaisseur=0.2, hauteur=2.5)
+        bpy.ops.bim.trame_reglages_poteau(x=3, y=2, z=0, largeur=0.3, profondeur=0.3, hauteur=2.5)
+        bpy.ops.bim.trame_creer_cote(points="0,0;6,0", decalage=-1, z=0)
+        bpy.ops.bim.trame_vue_plan()
+        bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=2)
+    if len(_poignees) != 2:
+        erreurs.append("dessin du plan non installé")
+    if len([c for c, _ in sections_etage(1.0) if c]) != 3:
+        erreurs.append(f"sections : {sections_etage(1.0)}")
     # Panneau Trame enregistré et dessinable.
     if not hasattr(bpy.types, "TRAME_PT_panneau"):
         erreurs.append("panneau absent")
