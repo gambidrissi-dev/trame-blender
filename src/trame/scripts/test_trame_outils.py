@@ -59,4 +59,36 @@ bpy.ops.bim.trame_reglages_fenetre(mur=mur.id(), position=1.0, z=0, largeur=1.0,
 assert ue.get_type(fenetre).Name == "Fenêtre 100 × 120"
 assert len(f.by_type("IfcRelFillsElement")) == 2
 assert round(tool.Ifc.get_object(fenetre).location.z, 2) == 1.0
+import json
+assert json.loads(ue.get_pset(ue.get_type(fenetre), "BBIM_Window")["Data"])["overall_width"] == 1.0
+
+# Poteau 25 × 40 centré au point cliqué.
+bpy.ops.bim.trame_reglages_poteau(x=3, y=4, z=0, largeur=0.25, profondeur=0.4, hauteur=2.7)
+(poteau,) = f.by_type("IfcColumn")
+po = tool.Ifc.get_object(poteau)
+assert ue.get_type(poteau).Name == "Poteau 25 × 40"
+assert sorted(round(v, 2) for v in po.dimensions) == [0.25, 0.4, 2.7] and tuple(round(v, 2) for v in po.location[:2]) == (3, 4)
+
+# Toits : deux pans sur 10 × 6 (pignons sur les petits côtés), quatre pans, un pan, terrasse.
+bpy.ops.bim.trame_reglages_toit(points="0,20;10,20;10,26;0,26", z=0, forme="DEUX_PANS", pente=35, epaisseur=0.25, depart=2.5)
+toits = f.by_type("IfcRoof")
+assert len(toits) == 1 and toits[0].PredefinedType == "GABLE_ROOF"
+to = tool.Ifc.get_object(toits[0])
+assert tuple(round(v, 1) for v in to.dimensions[:2]) == (10, 6) and round(to.location.z, 2) == 2.5
+assert 2.0 < to.dimensions.z < 2.6, to.dimensions  # 3 m × tan 35° + épaisseur
+bpy.ops.bim.trame_reglages_toit(points="0,30;10,30;10,36;0,36", z=0, forme="QUATRE_PANS", pente=30, epaisseur=0.2, depart=2.5)
+assert [r.PredefinedType for r in f.by_type("IfcRoof")] == ["GABLE_ROOF", "HIP_ROOF"]
+bpy.ops.bim.trame_reglages_toit(points="0,40;6,40;6,44;0,44", z=0, forme="UN_PAN", pente=15, epaisseur=0.2, depart=2.5)
+assert len(f.by_type("IfcRoof")) == 3
+bpy.ops.bim.trame_reglages_toit(points="0,50;6,50;6,54;0,54", z=0, forme="PLAT", epaisseur=0.3, depart=2.5)
+assert any(ue.get_type(s_).Name == "Toit-terrasse 30 cm" for s_ in f.by_type("IfcSlab"))
+
+# Escalier : de (2,60) vers (6,60), 1 m de large, 2,70 m en 16 marches, centré sur la ligne.
+bpy.ops.bim.trame_reglages_escalier(points="2,60;6,60", z=0, largeur=1.0, hauteur=2.7, marches=16)
+(esc,) = f.by_type("IfcStairFlight")
+eo = tool.Ifc.get_object(esc)
+from mathutils import Vector as V
+bb = [eo.matrix_world @ V(c) for c in eo.bound_box]
+assert round(min(v.y for v in bb), 2) == 59.5 and round(max(v.y for v in bb), 2) == 60.5, [v.y for v in bb]
+assert round(max(v.z for v in bb), 2) == 2.7 and round(min(v.x for v in bb), 2) == 2.0
 print("TEST OUTILS OK")

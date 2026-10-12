@@ -157,6 +157,8 @@ class RoofTool(BimTool):
     bl_description = "Create and edit roofs, including flat, shed, gable, hip, hipped gable, gambrel, mansard, barrel, rainbox, butterly, pavilion, dome, and freeform roofs"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.roof")
     bl_widget = None
+    # Trame : un clic utilise l'outil façon Archicad au lieu de sélectionner.
+    bl_keymap = (("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "TOIT")]}),) + BimTool.bl_keymap
     ifc_element_type = "IfcRoofType"
 
 
@@ -194,6 +196,8 @@ class StairFlightTool(BimTool):
     bl_description = "Create and edit stairs, including straight run, two straight run, quarter winding, quarter turn, half winding, half turn, two quarter winding, two wuarter turn, spiral, double return, curved run, and two curved run stairs"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.stairflight")
     bl_widget = None
+    # Trame : un clic utilise l'outil façon Archicad au lieu de sélectionner.
+    bl_keymap = (("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "ESCALIER")]}),) + BimTool.bl_keymap
     ifc_element_type = "IfcStairFlightType"
 
 
@@ -271,6 +275,8 @@ class ColumnTool(BimTool):
     bl_description = "Create and edit columns and pilasters"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.column")
     bl_widget = None
+    # Trame : un clic utilise l'outil façon Archicad au lieu de sélectionner.
+    bl_keymap = (("bim.trame_poser_poteau", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": []}),) + BimTool.bl_keymap
     ifc_element_type = "IfcColumnType"
 
 
