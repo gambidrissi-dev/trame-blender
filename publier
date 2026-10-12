@@ -20,7 +20,7 @@ rm -rf src/trame/build src/trame/dist
 [[ -f $ZIP ]] || { echo "Zip introuvable : $ZIP"; exit 1; }
 unzip -p $ZIP trame/blender_manifest.toml | grep -q "^version = \"$V\"" || { echo "Le zip ne porte pas la version $V"; exit 1; }
 
-git commit -qm "Trame $V" src/trame/VERSION
+git diff --quiet src/trame/VERSION || git commit -qm "Trame $V" src/trame/VERSION
 git tag v$V
 git push -q origin main v$V
 gh release create v$V $ZIP --title "Trame $V" --notes "Installation : Blender 5.2 › Préférences › Extensions › Installer depuis le disque › ce zip (Mac, puces Apple)."
