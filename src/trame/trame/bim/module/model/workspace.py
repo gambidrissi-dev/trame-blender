@@ -118,6 +118,10 @@ class WallTool(BimTool):
     bl_description = "Create and edit walls, including solid, movable, parapet, partitioning, plumbing, sheer, standard, polygonal, and elemented walls"
     bl_icon = os.path.join(os.path.dirname(__file__), "ops.authoring.wall")
     bl_widget = None
+    # Trame : avec l'outil Mur, un clic commence le tracé d'un mur (comme Archicad) au lieu de sélectionner.
+    bl_keymap = (
+        ("bim.trame_dessiner_mur", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": []}),
+    ) + BimTool.bl_keymap
     ifc_element_type = "IfcWallType"
 
 
