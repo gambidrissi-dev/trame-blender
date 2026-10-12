@@ -39,7 +39,7 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | # | Étape | État |
 |---|-------|------|
 | 17 | Matériaux : créer un matériau (nom, famille de hachure, couleur 3D), le choisir dans les outils | fait |
-| 18 | Calques : calques Archicad par défaut, chaque élément sur son calque, afficher/masquer/verrouiller | |
+| 18 | Calques : calques Archicad par défaut, chaque élément sur son calque, afficher/masquer/verrouiller | fait |
 | 19 | Vision plan : trait noir sur blanc (vu en traits), étage inférieur en calque de fond, toit du dessus en pointillés | |
 | 20 | Toiture : débord, toit tracé sur le contour des murs | |
 | 21 | Escaliers : en L et en U avec palier | |

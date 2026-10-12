@@ -47,6 +47,8 @@ attendu = {"IfcWall": 8, "IfcSlab": 2, "IfcDoor": 1, "IfcWindow": 2, "IfcColumn"
            "IfcRoof": 1, "IfcBuildingStorey": 2}
 compte = {c: len(g.by_type(c)) for c in attendu}
 assert compte == attendu, compte
+calques_ifc = {c.Name for c in g.by_type("IfcPresentationLayerWithStyle")}
+assert {"Murs", "Dalles", "Toiture", "Menuiseries", "Structure", "Escaliers", "Cotation"} <= calques_ifc
 assert len(g.by_type("IfcRelFillsElement")) == 3 and len(g.by_type("IfcRelVoidsElement")) == 3
 etage_de = lambda e: ue.get_container(e).Name
 assert sorted(etage_de(w) for w in g.by_type("IfcWall")) == ["R+1"] * 4 + ["Rez-de-chaussée"] * 4

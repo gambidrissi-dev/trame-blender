@@ -594,6 +594,9 @@ def _demarrage_trame() -> None:
                 from trame.bim.module.model.trame_materiaux import materiaux
 
                 materiaux()  # matériaux Trame par défaut, avec leurs couleurs
+                from trame.bim.module.model.trame_calques import calques
+
+                calques()  # calques Archicad par défaut
             for window in bpy.context.window_manager.windows:
                 for area in window.screen.areas:
                     if area.type != "VIEW_3D":

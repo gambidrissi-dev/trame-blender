@@ -177,4 +177,18 @@ assert motif(max(f.by_type("IfcWall"), key=lambda w: w.id())) == "platre"
 ob = tool.Ifc.get_object(mur_bois)
 couleurs = [tuple(round(c, 2) for c in m.diffuse_color[:3]) for m in ob.data.materials if m]
 assert (0.7, 0.5, 0.3) in couleurs, couleurs
+# Calques : chaque élément créé par un outil est rangé sur son calque ; masquer/verrouiller un calque.
+from trame.bim.module.model.trame_calques import calque_de, calques, basculer, elements_du_calque
+nom_calque = lambda e: calque_de(e).Name if calque_de(e) else None
+assert nom_calque(mur_bois) == "Murs" and nom_calque(max(f.by_type("IfcWall"), key=lambda w: w.id())) == "Cloisons"
+assert nom_calque(porte) == "Menuiseries" and nom_calque(f.by_type("IfcColumn")[0]) == "Structure"
+assert nom_calque(f.by_type("IfcRoof")[0]) == "Toiture" and nom_calque(f.by_type("IfcStairFlight")[0]) == "Escaliers"
+assert nom_calque(cote) == "Cotation" and nom_calque(dalle) == "Dalles"
+murs = calques()["Murs"]
+basculer("Murs", "LayerOn")
+assert murs.LayerOn is False and all(tool.Ifc.get_object(e).hide_get() for e in elements_du_calque(murs))
+basculer("Murs", "LayerOn")
+assert murs.LayerOn is True and not tool.Ifc.get_object(mur_bois).hide_get()
+basculer("Menuiseries", "LayerBlocked")
+assert tool.Ifc.get_object(porte).hide_select is True
 print("TEST OUTILS OK")

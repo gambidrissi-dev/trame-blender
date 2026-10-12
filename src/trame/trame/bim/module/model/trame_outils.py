@@ -22,6 +22,7 @@ import trame.core.geometry
 import trame.core.root
 from trame.bim.module.model import roof as bonsai_toit
 from trame.bim.module.model.slab import DumbSlabGenerator
+from trame.bim.module.model.trame_calques import ranger_calques
 from trame.bim.module.model.trame_materiaux import items_materiaux, materiau as materiau_nomme
 from trame.bim.module.model.trame_plan import creer_cote, decalage_vers, geometrie_cote
 from trame.bim.module.model.wall import DumbWallGenerator, DumbWallJoiner
@@ -485,6 +486,7 @@ class TRAME_OT_reglages_mur(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operator
             a = math.radians(self.angle)
             pts[1] = (pts[0][0] + self.longueur * math.cos(a), pts[0][1] + self.longueur * math.sin(a))
         creer_murs(pts, self.z, self.epaisseur, self.hauteur, self.materiau)
+        ranger_calques()
         return {"FINISHED"}
 
 
@@ -512,6 +514,7 @@ class TRAME_OT_reglages_dalle(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operat
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
         creer_dalle(pts, self.z, self.epaisseur, nom_materiau=self.materiau)
+        ranger_calques()
         return {"FINISHED"}
 
 
@@ -539,6 +542,7 @@ class _ReglagesOuverture:
             self.classe, tool.Ifc.get().by_id(self.mur), self.position, self.z,
             self.largeur, self.hauteur, allege, self.modele, self.retourner,
         )
+        ranger_calques()
         return {"FINISHED"}
 
 
@@ -619,6 +623,7 @@ class TRAME_OT_reglages_poteau(_AvecMateriau, bpy.types.Operator, tool.Ifc.Opera
 
     def _execute(self, context):
         creer_poteau(self.x, self.y, self.z, self.largeur, self.profondeur, self.hauteur, self.materiau)
+        ranger_calques()
         return {"FINISHED"}
 
 
@@ -676,6 +681,7 @@ class TRAME_OT_reglages_toit(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operato
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
         creer_toit(pts, self.z, self.forme, self.pente, self.epaisseur, self.depart, self.materiau)
+        ranger_calques()
         return {"FINISHED"}
 
 
@@ -709,6 +715,7 @@ class TRAME_OT_reglages_escalier(bpy.types.Operator, tool.Ifc.Operator):
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
         creer_escalier(pts[0], pts[1], self.z, self.largeur, self.hauteur, self.marches)
+        ranger_calques()
         return {"FINISHED"}
 
 
@@ -759,6 +766,7 @@ class TRAME_OT_creer_cote(bpy.types.Operator, tool.Ifc.Operator):
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
         creer_cote(pts, self.decalage, self.z)
+        ranger_calques()
         return {"FINISHED"}
 
 

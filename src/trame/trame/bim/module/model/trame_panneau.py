@@ -217,6 +217,24 @@ class TRAME_PT_panneau(bpy.types.Panel):
         ligne.operator("wm.tool_set_by_id", text="Cote", icon="DRIVER_DISTANCE").name = "bim.trame_cote_tool"
 
         layout.separator()
+        layout.label(text="Calques")
+        from trame.bim.module.model.trame_calques import CALQUES
+
+        existants = {c.Name: c for c in tool.Ifc.get().by_type("IfcPresentationLayerWithStyle")}
+        col = layout.column(align=True)
+        for nom in CALQUES:
+            if not (calque := existants.get(nom)):
+                continue
+            ligne = col.row(align=True)
+            ligne.label(text=nom)
+            op = ligne.operator("bim.trame_basculer_calque", text="", emboss=False,
+                                icon="HIDE_OFF" if calque.LayerOn else "HIDE_ON")
+            op.nom, op.attribut = nom, "LayerOn"
+            op = ligne.operator("bim.trame_basculer_calque", text="", emboss=False,
+                                icon="LOCKED" if calque.LayerBlocked else "UNLOCKED")
+            op.nom, op.attribut = nom, "LayerBlocked"
+
+        layout.separator()
         layout.label(text="Matériaux")
         from trame.bim.module.model.trame_materiaux import famille_de, FAMILLES
 
