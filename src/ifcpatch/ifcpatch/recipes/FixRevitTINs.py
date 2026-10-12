@@ -63,7 +63,7 @@ class Patcher:
         ignored.
 
         :param filepath: The filepath of the IFC model. This is required to
-            load into Bonsai.
+            load into Trame.
         :filter_glob filepath: *.ifc;*.ifczip;*.ifcxml
 
         Example:
@@ -81,7 +81,7 @@ class Patcher:
         from math import degrees
 
         import bmesh  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
-        import bonsai.tool as tool
+        import trame.tool as tool
         import bpy  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
 
         props = tool.Project.get_project_props()

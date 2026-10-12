@@ -190,7 +190,7 @@ class Usecase:
         node: bpy.types.ShaderNodeTexImage,
         mode: Literal["DIFFUSE", "EMISSIVE", "METALLICROUGHNESS", "NORMAL", "OCCLUSION"],
     ) -> None:
-        import bonsai.tool as tool
+        import trame.tool as tool
 
         texture = self.file.create_entity(
             "IfcImageTexture",

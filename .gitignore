@@ -141,3 +141,10 @@ CLAUDE.local.md
 # bonsaiviewer-autodesk connector build artifacts
 /src/bonsaiviewer-autodesk/build/
 /src/bonsaiviewer-autodesk/dist/
+
+# Trame : sorties de build
+src/trame/build/
+src/trame/dist/
+src/trame/trame/bim/data/gantt/jsgantt.*
+src/trame/trame/bim/data/webui/static/js/jquery.min.js
+src/ifctester/ifctester/webapp/

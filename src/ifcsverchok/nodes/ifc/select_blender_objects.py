@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with IfcSverchok.  If not, see <http://www.gnu.org/licenses/>.
 
-import bonsai.tool as tool
+import trame.tool as tool
 import bpy
 import ifcopenshell
 from bpy.props import StringProperty
@@ -54,7 +54,7 @@ class SvIfcSelectBlenderObjects(bpy.types.Node, SverchCustomTreeNode, ifcsvercho
         helper.create_socket(
             self.inputs,
             "entities",
-            description="IFC entities to select Bonsai Blender objects for (selects only objects by matching GlobalId).",
+            description="IFC entities to select Trame Blender objects for (selects only objects by matching GlobalId).",
             data_type="list[list[ifcopenshell.entity_instance]]",
             prop_name="entities",
         )

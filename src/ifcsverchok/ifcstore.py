@@ -18,7 +18,7 @@
 
 from typing import Any, Union
 
-import bonsai.tool as tool
+import trame.tool as tool
 import bpy
 import ifcopenshell
 import ifcopenshell.api.context

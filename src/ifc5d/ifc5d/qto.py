@@ -690,7 +690,7 @@ class IfcOpenShell(QtoCalculator):
 
     @staticmethod
     def get_covering_parametric_axis(element: ifcopenshell.entity_instance) -> Union[str, None]:
-        """Get an IfcCovering's layer set direction, as authored by Bonsai's covering type.
+        """Get an IfcCovering's layer set direction, as authored by Trame's covering type.
 
         :param element: IFC element entity.
         :return: ``"AXIS2"`` for wall-like coverings, ``"AXIS3"`` for slab-like
@@ -729,7 +729,7 @@ class IfcOpenShell(QtoCalculator):
         local Z depth. This mirrors how ``net_get_y`` is already used for
         ``Qto_WallBaseQuantities.Width`` in this same rule set, rather than
         the ``min(X, Y)`` heuristic used by the Blender-side
-        :func:`bonsai.bim.module.qto.calculator.get_width`.
+        :func:`trame.bim.module.qto.calculator.get_width`.
         """
         if cls.get_covering_parametric_axis(element) == "AXIS2":
             return ifcopenshell.util.shape.get_y(geometry)
@@ -739,7 +739,7 @@ class IfcOpenShell(QtoCalculator):
 class Blender(QtoCalculator):
     """Calculates geometry based on currently loaded Blender objects."""
 
-    # Implementations are located in bonsai.bim.module.qto.calculator.
+    # Implementations are located in trame.bim.module.qto.calculator.
     functions = {
         # IfcLengthMeasure
         "get_x": Function("IfcLengthMeasure", "X", ""),
@@ -798,7 +798,7 @@ class Blender(QtoCalculator):
         if cls.description_populated:
             return
 
-        import bonsai.bim.module.qto.calculator as calculator
+        import trame.bim.module.qto.calculator as calculator
 
         for function in cls.functions:
             doc = getattr(calculator, function).__doc__ or ""
@@ -808,8 +808,8 @@ class Blender(QtoCalculator):
 
     @classmethod
     def calculate(cls, ifc_file, elements, qtos, results):
-        import bonsai.bim.module.qto.calculator as calculator
-        import bonsai.tool as tool
+        import trame.bim.module.qto.calculator as calculator
+        import trame.tool as tool
 
         unit_converter = SI2ProjectUnitConverter(ifc_file)
         formula_functions: dict[str, types.FunctionType] = {}

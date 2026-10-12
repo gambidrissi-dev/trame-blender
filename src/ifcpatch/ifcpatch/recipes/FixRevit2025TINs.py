@@ -91,7 +91,7 @@ class Patcher:
         ignored.
 
         :param filepath: The filepath of the IFC model. This is required to
-            load into Bonsai.
+            load into Trame.
         :param is_solid: If true, assume a thickness and delete anything that
             isn't the top face.
         :param should_create_edges: If true, a new IfcVirtualElement is created
@@ -114,7 +114,7 @@ class Patcher:
 
     def patch(self) -> None:
         import bmesh  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
-        import bonsai.tool as tool
+        import trame.tool as tool
         import bpy  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
         import ifcopenshell.util.schema
         import ifcopenshell.util.unit
@@ -167,7 +167,7 @@ class Patcher:
 
     def create_edges(self, obj: bpy.types.Object) -> None:
         import bmesh  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
-        import bonsai.tool as tool
+        import trame.tool as tool
         import bpy  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
         import ifcopenshell.api.geometry
         import ifcopenshell.api.root
@@ -235,7 +235,7 @@ class Patcher:
         from math import degrees
 
         import bmesh  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
-        import bonsai.tool as tool
+        import trame.tool as tool
         import ifcopenshell.api.geometry
         import ifcopenshell.api.root
         import ifcopenshell.util.representation
@@ -282,7 +282,7 @@ class Patcher:
         from math import degrees, radians, sin
 
         import bmesh  # pyright: ignore[reportMissingImports]  # ty:ignore[unresolved-import]
-        import bonsai.tool as tool
+        import trame.tool as tool
         import ifcopenshell.api.geometry
         import ifcopenshell.api.root
         import ifcopenshell.util.representation
@@ -440,7 +440,7 @@ class Patcher:
     def create_curves_from_curve_ifc2x3(
         self, is_2d: bool = False, curve_object_data=None
     ) -> list[ifcopenshell.entity_instance]:
-        import bonsai.tool as tool
+        import trame.tool as tool
 
         dim = (lambda v: v.xy) if is_2d else (lambda v: v.xyz)
         results = []
@@ -455,7 +455,7 @@ class Patcher:
     def create_curves_from_curve(
         self, is_2d: bool = False, curve_object_data=None
     ) -> list[ifcopenshell.entity_instance]:
-        import bonsai.tool as tool
+        import trame.tool as tool
         import numpy as np
 
         dim = (lambda v: v.xy) if is_2d else (lambda v: v.xyz)

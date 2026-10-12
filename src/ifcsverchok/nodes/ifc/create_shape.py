@@ -18,7 +18,7 @@
 
 import logging
 
-import bonsai.bim.import_ifc
+import trame.bim.import_ifc
 import bpy
 import ifcopenshell.geom
 from bpy.props import BoolProperty, StringProperty
@@ -86,10 +86,10 @@ class SvIfcCreateShape(bpy.types.Node, SverchCustomTreeNode, ifcsverchok.helper.
                 if not entity.is_a("IfcProduct"):
                     return
                 logger = logging.getLogger("ImportIFC")
-                self.ifc_import_settings = bonsai.bim.import_ifc.IfcImportSettings.factory(bpy.context, "", logger)
+                self.ifc_import_settings = trame.bim.import_ifc.IfcImportSettings.factory(bpy.context, "", logger)
                 settings = ifcopenshell.geom.settings()
                 shape = ifcopenshell.geom.create_shape(settings, entity)
-                ifc_importer = bonsai.bim.import_ifc.IfcImporter(self.ifc_import_settings)
+                ifc_importer = trame.bim.import_ifc.IfcImporter(self.ifc_import_settings)
                 ifc_importer.file = self.file
                 mesh = ifc_importer.create_mesh(entity, shape)
                 obj = bpy.data.objects.new("IFC Element", mesh)

@@ -386,16 +386,16 @@ class Ifc5Dwriter:
                 "PredefinedType": cost_schedule.PredefinedType,
             }
 
-    # Presentation formats (.ods / .xlsx) mirror exactly what the Bonsai cost
+    # Presentation formats (.ods / .xlsx) mirror exactly what the Trame cost
     # panel shows for a cost item: ID (Identification), Name, Quantity,
     # Value (RateSubtotal) and the calculated Total Cost. Everything else
     # (internal bookkeeping columns, Description, Unit, per-category cost
-    # breakdowns) is bonsai/csv2ifc round-trip plumbing and stays out of the
+    # breakdowns) is trame/csv2ifc round-trip plumbing and stays out of the
     # presentation formats. The .csv format keeps the full column set since
     # csv2ifc reads those extra columns back in on import.
     PRESENTATION_COLUMNS = ("Identification", "Name", "Quantity", "RateSubtotal", "TotalPrice")
 
-    # Header text as shown in presentation formats, matching the Bonsai cost
+    # Header text as shown in presentation formats, matching the Trame cost
     # panel's own column labels (see BIM_UL_cost_items_trait.draw_header).
     PRESENTATION_LABELS = {
         "Identification": "ID",
@@ -600,7 +600,7 @@ class Ifc5DOdsWriter(Ifc5Dwriter):
 class Ifc5DXlsxWriter(Ifc5Dwriter):
     def write(self) -> None:
         # openpyxl rather than xlsxwriter: it is what ifccsv already uses and
-        # what ships with Bonsai, so XLSX export works out of the box there.
+        # what ships with Trame, so XLSX export works out of the box there.
         import openpyxl
 
         super().write()

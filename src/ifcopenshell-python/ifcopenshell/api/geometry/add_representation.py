@@ -31,8 +31,8 @@ import ifcopenshell.util.unit
 from ifcopenshell.util.shape_builder import ifc_safe_vector_type
 
 if TYPE_CHECKING:
-    import bonsai.tool as tool
-    from bonsai.bim.module.geometry.helper import Helper
+    import trame.tool as tool
+    from trame.bim.module.geometry.helper import Helper
 
 
 Z_AXIS = Vector((0, 0, 1))
@@ -88,8 +88,8 @@ def add_representation(
     """
     # lazy import Helper to avoid circular import
     if "Helper" not in globals():
-        import bonsai.tool as tool
-        from bonsai.bim.module.geometry.helper import Helper
+        import trame.tool as tool
+        from trame.bim.module.geometry.helper import Helper
 
         globals()["Helper"] = Helper
         globals()["tool"] = tool
@@ -526,7 +526,7 @@ class Usecase:
         return results
 
     def is_mesh_curve_consecutive(self, geom_data: bpy.types.Mesh) -> bool:
-        import bonsai.tool as tool
+        import trame.tool as tool
 
         bm = tool.Blender.get_bmesh_for_mesh(geom_data)
         bm.verts.ensure_lookup_table()
@@ -584,7 +584,7 @@ class Usecase:
                     return self.create_curves_from_mesh_ifc2x3(should_exclude_faces=should_exclude_faces, is_2d=is_2d)
                 return self.create_curves_from_mesh(should_exclude_faces=should_exclude_faces, is_2d=is_2d)
 
-        import bonsai.tool as tool
+        import trame.tool as tool
 
         selected_objects = bpy.context.selected_objects
         active_object = bpy.context.active_object
@@ -640,7 +640,7 @@ class Usecase:
         return curves
 
     def remove_doubles_from_mesh(self, mesh: bpy.types.Mesh) -> None:
-        import bonsai.tool as tool
+        import trame.tool as tool
 
         bm = tool.Blender.get_bmesh_for_mesh(mesh)
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
