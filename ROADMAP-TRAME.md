@@ -17,16 +17,16 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | 1 | Démarrage prêt à dessiner (projet, vue en plan, Outil Mur, français) | fait |
 | 2 | Mur : 2 clics + réglages, enchaînement, fermeture, accroche aux extrémités | fait |
 | 3 | Dalle, Porte, Fenêtre | fait |
-| 4 | Poteau : 1 clic + section/hauteur | |
-| 5 | Toit : contour + type (plat, 1 pan, 2 pans, 4 pans), pente, épaisseur | |
-| 6 | Escalier : 2 clics (départ, direction) + largeur, hauteur à franchir | |
-| 7 | Porte : sens et côté d'ouverture ; raccord des murs accrochés à un mur existant | |
-| 8 | Saisie de la longueur au clavier pendant le tracé | |
-| 9 | Étages : panneau, étage actif, ajouter un étage, hauteur des murs = hauteur d'étage | |
-| 10 | Écran Trame : panneau « Trame » (outils, étages, 3D), boîte à outils réduite aux outils d'archi | |
-| 11 | Vue 3D dans une fenêtre à part (un bouton) | |
-| 12 | Coupe : 2 clics → vue en coupe | |
-| 13 | Enregistrer / ouvrir en IFC depuis le panneau Trame | |
+| 4 | Poteau : 1 clic + section/hauteur | fait |
+| 5 | Toit : contour + type (plat, 1 pan, 2 pans, 4 pans), pente, épaisseur | fait |
+| 6 | Escalier : 2 clics (départ, direction) + largeur, hauteur à franchir | fait |
+| 7 | Porte : sens et côté d'ouverture ; raccord des murs accrochés à un mur existant | fait |
+| 8 | Saisie de la longueur au clavier pendant le tracé | fait |
+| 9 | Étages : panneau, étage actif, ajouter un étage, hauteur des murs = hauteur d'étage | fait |
+| 10 | Écran Trame : panneau « Trame » (outils, étages, 3D), boîte à outils réduite aux outils d'archi | fait |
+| 11 | Vue 3D dans une fenêtre à part (un bouton) | fait |
+| 12 | Coupe : 2 clics → vue en coupe | fait |
+| 13 | Enregistrer / ouvrir en IFC depuis le panneau Trame | fait |
 | 14 | Test « maison R+1 » de bout en bout + publication | |
 
 ## Hors périmètre de cette mission

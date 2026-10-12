@@ -18,6 +18,7 @@ from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix, Vector
 
 import trame.tool as tool
+import trame.core.geometry
 import trame.core.root
 from trame.bim.module.model import roof as bonsai_toit
 from trame.bim.module.model.slab import DumbSlabGenerator
@@ -346,6 +347,33 @@ def creer_escalier(depart, arrivee, z: float, largeur: float, hauteur: float, ma
     return bpy.context.active_object
 
 
+def creer_coupe(depart, arrivee, nom: str, profondeur: float):
+    """Vue en coupe de Bonsai sur la ligne cliquée, qui regarde vers la gauche du tracé."""
+    a, b = Vector((depart[0], depart[1], 0)), Vector((arrivee[0], arrivee[1], 0))
+    axe_x = (b - a).normalized()
+    regard = Vector((-axe_x.y, axe_x.x, 0))  # à gauche du tracé
+    hauts = [o.location.z for e in tool.Ifc.get().by_type("IfcBuildingStorey") if (o := tool.Ifc.get_object(e))]
+    bas, haut = min(hauts, default=0.0) - 1.0, max(hauts, default=0.0) + 6.0  # tout le bâtiment, toit compris
+    proprietes = tool.Drawing.get_document_props()
+    proprietes.target_view = "SECTION_VIEW"
+    avant = {a_ for a_ in tool.Ifc.get().by_type("IfcAnnotation") if a_.ObjectType == "DRAWING"}
+    bpy.ops.bim.add_drawing()
+    (dessin,) = {a_ for a_ in tool.Ifc.get().by_type("IfcAnnotation") if a_.ObjectType == "DRAWING"} - avant
+    camera = tool.Ifc.get_object(dessin)
+    # Caméra : son axe X suit le tracé, Y monte, et elle regarde selon -Z local.
+    rotation = Matrix((axe_x, Vector((0, 0, 1)), -regard)).transposed().to_4x4()
+    centre = (a + b) / 2
+    centre.z = (bas + haut) / 2
+    camera.matrix_world = Matrix.Translation(centre) @ rotation
+    cam = tool.Drawing.get_camera_props(camera)
+    cam.width, cam.height = max((b - a).length, 1.0), haut - bas
+    camera.data.clip_end = profondeur
+    dessin.Name = nom
+    camera.name = nom
+    trame.core.geometry.edit_object_placement(tool.Ifc, tool.Geometry, tool.Surveyor, obj=camera)
+    return camera
+
+
 def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, epaisseur: float, hauteur: float):
     gen = DumbWallGenerator(type_de_mur(epaisseur))
     gen.file = tool.Ifc.get()
@@ -641,6 +669,40 @@ class TRAME_OT_reglages_escalier(bpy.types.Operator, tool.Ifc.Operator):
         return {"FINISHED"}
 
 
+class TRAME_OT_reglages_coupe(bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.trame_reglages_coupe"
+    bl_label = "Coupe"
+    bl_description = "Créer la vue en coupe tracée"
+    bl_options = {"REGISTER", "UNDO"}
+
+    points: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    nom: bpy.props.StringProperty(name="Nom", default="Coupe A", options={"SKIP_SAVE"})
+    profondeur: bpy.props.FloatProperty(
+        name="Profondeur de vue", unit="LENGTH", default=15, min=0.5, max=500,
+        description="Jusqu'où la coupe voit derrière le plan de coupe",
+    )
+
+    def invoke(self, context, event):
+        existantes = [a for a in tool.Ifc.get().by_type("IfcAnnotation") if a.ObjectType == "DRAWING"]
+        self.nom = f"Coupe {chr(ord('A') + len(existantes) % 26)}"
+        return context.window_manager.invoke_props_dialog(self, title="Coupe", confirm_text="Créer")
+
+    def draw(self, context):
+        col = self.layout.column()
+        col.use_property_split = True
+        col.prop(self, "nom")
+        col.prop(self, "profondeur")
+
+    def _execute(self, context):
+        pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
+        camera = creer_coupe(pts[0], pts[1], self.nom, self.profondeur)
+        if not bpy.app.background:
+            from trame.bim.module.model.trame_panneau import nouvelle_fenetre_3d
+
+            nouvelle_fenetre_3d(context, camera)  # la coupe s'ouvre dans sa propre fenêtre
+        return {"FINISHED"}
+
+
 class TRAME_OT_dessiner(bpy.types.Operator):
     bl_idname = "bim.trame_dessiner"
     bl_label = "Dessiner des murs ou une dalle"
@@ -657,7 +719,8 @@ class TRAME_OT_dessiner(bpy.types.Operator):
     RAYON_FERMETURE_PX = 12
 
     element: bpy.props.EnumProperty(
-        items=(("MUR", "Mur", ""), ("DALLE", "Dalle", ""), ("TOIT", "Toit", ""), ("ESCALIER", "Escalier", ""))
+        items=(("MUR", "Mur", ""), ("DALLE", "Dalle", ""), ("TOIT", "Toit", ""), ("ESCALIER", "Escalier", ""),
+               ("COUPE", "Coupe", ""))
     )
 
     @classmethod
@@ -729,7 +792,7 @@ class TRAME_OT_dessiner(bpy.types.Operator):
             if longueur:
                 self.fin = point_a_distance(self.points[-1], self.fin, longueur)
                 self.points.append(self.fin.copy())
-                if self.element == "ESCALIER":
+                if self.element in {"ESCALIER", "COUPE"}:
                     return self.valider(context)
             return {"RUNNING_MODAL"}
         if event.type == "LEFTMOUSE" and event.value == "DOUBLE_CLICK":
@@ -740,8 +803,8 @@ class TRAME_OT_dessiner(bpy.types.Operator):
             if (self.fin - self.points[-1]).length < 0.01:
                 return {"RUNNING_MODAL"}  # clic au même endroit : ignoré
             self.points.append(self.fin.copy())
-            if self.element == "ESCALIER":
-                return self.valider(context)  # départ + direction : c'est tout
+            if self.element in {"ESCALIER", "COUPE"}:
+                return self.valider(context)  # deux points suffisent
             if (self.fin - self.points[0]).length < 1e-6:
                 return self.valider(context)  # contour fermé
         return {"RUNNING_MODAL"}
@@ -757,10 +820,11 @@ class TRAME_OT_dessiner(bpy.types.Operator):
             dialogue = bpy.ops.bim.trame_reglages_dalle if self.element == "DALLE" else bpy.ops.bim.trame_reglages_toit
             dialogue("INVOKE_DEFAULT", points=texte, z=self.z)
             return {"FINISHED"}
-        if self.element == "ESCALIER":
+        if self.element in {"ESCALIER", "COUPE"}:
             if len(pts) < 2:
                 return {"CANCELLED"}
-            bpy.ops.bim.trame_reglages_escalier("INVOKE_DEFAULT", points=texte, z=self.z)
+            dialogue = bpy.ops.bim.trame_reglages_escalier if self.element == "ESCALIER" else bpy.ops.bim.trame_reglages_coupe
+            dialogue("INVOKE_DEFAULT", points=texte, **({"z": self.z} if self.element == "ESCALIER" else {}))
             return {"FINISHED"}
         if len(pts) < 2:
             return {"CANCELLED"}

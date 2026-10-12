@@ -599,6 +599,11 @@ def _demarrage_trame() -> None:
                     with bpy.context.temp_override(window=window, area=area, region=region):
                         bpy.ops.view3d.view_axis(type="TOP")
                         bpy.ops.wm.tool_set_by_id(name="bim.wall_tool")
+                    # Plan coupé à 1 m et panneau Trame ouvert sur le côté.
+                    from trame.bim.module.model.trame_panneau import appliquer_coupe_plan
+
+                    appliquer_coupe_plan(area, tool.Root.get_default_container_elevation())
+                    area.spaces.active.show_region_ui = True
         except Exception:
             traceback.print_exc()  # ne jamais bloquer le démarrage de Blender
         return None

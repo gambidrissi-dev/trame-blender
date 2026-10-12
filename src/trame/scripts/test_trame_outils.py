@@ -111,4 +111,22 @@ assert lire_longueur("3,5") == 3.5 and lire_longueur("2.") == 2.0 and lire_longu
 p = point_a_distance(V((1, 1, 0)), V((1, 9, 0)), 3.5)
 assert tuple(round(c, 6) for c in p) == (1, 4.5, 0)
 assert tuple(point_a_distance(V((0, 0, 0)), V((0, 0, 0)), 2)) == (2, 0, 0)
+# Étages : un R+1 à 2,80 m au-dessus, actif ; un mur dessiné dessus y est rangé, à sa hauteur.
+from trame.bim.module.model.trame_panneau import ajouter_etage, activer_etage, etages
+r1 = ajouter_etage("R+1", 2.8)
+activer_etage(r1)
+assert [e.Name for e, _ in etages()] == ["R+1", "Rez-de-chaussée"] and round(etages()[0][1], 2) == 2.8
+assert tool.Root.get_default_container() == r1 and round(tool.Root.get_default_container_elevation(), 2) == 2.8
+bpy.ops.bim.trame_reglages_mur(points="0,70;5,70", z=2.8, longueur=5, angle=0, epaisseur=0.2, hauteur=2.5)
+mur_r1 = max(f.by_type("IfcWall"), key=lambda w: w.id())
+assert ue.get_container(mur_r1) == r1 and round(tool.Ifc.get_object(mur_r1).location.z, 2) == 2.8
+activer_etage(etages()[-1][0])
+
+# Coupe sur la ligne (0,80)→(10,80) : caméra au milieu, regard vers +Y (à gauche du tracé).
+bpy.ops.bim.trame_reglages_coupe(points="0,80;10,80", nom="Coupe A", profondeur=12)
+(dessin,) = [a for a in f.by_type("IfcAnnotation") if a.ObjectType == "DRAWING"]
+cam = tool.Ifc.get_object(dessin)
+regard = cam.matrix_world.to_3x3() @ V((0, 0, -1))
+assert dessin.Name == "Coupe A" and tuple(round(c, 2) for c in cam.location[:2]) == (5, 80)
+assert tuple(round(c, 2) for c in regard) == (0, 1, 0) and cam.data.clip_end == 12
 print("TEST OUTILS OK")

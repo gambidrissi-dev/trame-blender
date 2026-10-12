@@ -125,6 +125,19 @@ class WallTool(BimTool):
     ifc_element_type = "IfcWallType"
 
 
+class TrameCoupeTool(WorkSpaceTool):
+    bl_space_type = "VIEW_3D"
+    bl_context_mode = "OBJECT"
+    bl_idname = "bim.trame_coupe_tool"
+    bl_label = "Outil Coupe"
+    bl_description = "Cliquez deux points : la coupe passe par cette ligne et regarde vers la gauche du tracé"
+    bl_icon = "ops.mesh.knife_tool"
+    bl_widget = None
+    bl_keymap = (
+        ("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "COUPE")]}),
+    )
+
+
 class RailingTool(BimTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
