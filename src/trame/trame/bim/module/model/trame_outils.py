@@ -2,6 +2,7 @@
 # This file is part of Trame, derived from Bonsai (GPL-3.0-or-later).
 
 import math
+from typing import get_args
 
 import bpy
 import blf
@@ -127,17 +128,31 @@ def type_de_dalle(epaisseur_m: float, prefixe: str = "Dalle", predefini: str = "
     return slab_type
 
 
-def type_d_ouverture(classe: str, largeur: float, hauteur: float) -> ifcopenshell.entity_instance:
-    """Retrouve ou crée le type paramétrique « Porte 90 × 210 » / « Fenêtre 120 × 135 » de Bonsai."""
+OUVERTURES_PORTE = (
+    ("SINGLE_SWING_LEFT", "Battante à gauche", ""),
+    ("SINGLE_SWING_RIGHT", "Battante à droite", ""),
+    ("DOUBLE_DOOR_SINGLE_SWING", "Deux vantaux", ""),
+    ("SLIDING_TO_LEFT", "Coulissante", ""),
+)
+VANTAUX_FENETRE = (("SINGLE_PANEL", "Un vantail", ""), ("DOUBLE_PANEL_VERTICAL", "Deux vantaux", ""))
+
+
+def type_d_ouverture(classe: str, largeur: float, hauteur: float, modele: str = "") -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type paramétrique « Porte 90 × 210 … » / « Fenêtre 120 × 135 … » de Bonsai."""
     f = tool.Ifc.get()
     porte = classe == "IfcDoorType"
-    nom = f"{'Porte' if porte else 'Fenêtre'} {largeur * 100:g} × {hauteur * 100:g}"
+    modeles = OUVERTURES_PORTE if porte else VANTAUX_FENETRE
+    modele = modele or modeles[0][0]
+    libelle = next(m[1] for m in modeles if m[0] == modele).lower()
+    nom = f"{'Porte' if porte else 'Fenêtre'} {largeur * 100:g} × {hauteur * 100:g} {libelle}"
     for t in f.by_type(classe):
         if t.Name == nom:
             return t
     # Les paramètres par défaut de Bonsai servent de gabarit ; affectation directe pour ne pas déclencher ses mises à jour.
     defauts = getattr(tool.Blender.get_addon_preferences().default_parameters, "door" if porte else "window")
     defauts["overall_width"], defauts["overall_height"] = largeur, hauteur
+    choix = get_args(tool.Model.DoorType if porte else tool.Model.WindowType)
+    defauts["door_type" if porte else "window_type"] = choix.index(modele)
     props = tool.Root.get_root_props()
     props.ifc_product = "IfcElementType"
     props.ifc_class = classe
@@ -167,9 +182,14 @@ def creer_dalle(points: list, z: float, epaisseur: float, type_=None):
     return gen.create_slab()
 
 
-def creer_ouverture(classe: str, mur, position: float, z: float, largeur: float, hauteur: float, allege: float):
-    """Pose une porte/fenêtre centrée à « position » mètres du début de l'axe du mur ; Bonsai perce le mur."""
-    type_ = type_d_ouverture(classe, largeur, hauteur)
+def creer_ouverture(
+    classe: str, mur, position: float, z: float, largeur: float, hauteur: float, allege: float,
+    modele: str = "", retourner: bool = False,
+):
+    """Pose une porte/fenêtre centrée à « position » mètres du début de l'axe du mur ; Bonsai perce le mur.
+
+    « retourner » la bascule de l'autre côté du mur (ouverture vers l'intérieur ou l'extérieur)."""
+    type_ = type_d_ouverture(classe, largeur, hauteur, modele)
     a, b = axe_mur(mur, z)
     direction = (b - a).normalized()
     origine = a + direction * (position - largeur / 2)  # l'origine d'une porte Bonsai est son bord gauche
@@ -184,7 +204,11 @@ def creer_ouverture(classe: str, mur, position: float, z: float, largeur: float,
     avant = set(tool.Ifc.get().by_type(classe[:-4]))
     bpy.ops.bim.add_occurrence(relating_type_id=type_.id())
     (nouvelle,) = set(tool.Ifc.get().by_type(classe[:-4])) - avant
-    return tool.Ifc.get_object(nouvelle)
+    obj = tool.Ifc.get_object(nouvelle)
+    if retourner:
+        selectionner_seul(obj)
+        bpy.ops.bim.flip_fill()
+    return obj
 
 
 def selectionner_seul(obj) -> None:
@@ -324,6 +348,13 @@ def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, e
 
 def creer_murs(points: list, z: float, epaisseur: float, hauteur: float) -> list:
     """Un mur par segment, raccordés en angle ; chaîne fermée si le dernier point rejoint le premier."""
+    # Murs existants dont une extrémité coïncide avec le début ou la fin du tracé : on les raccordera.
+    voisins = {}
+    for mur in tool.Ifc.get().by_type("IfcWall"):
+        for extremite in axe_mur(mur, z) or ():
+            for i in (0, len(points) - 1):
+                if (Vector((points[i][0], points[i][1], z)) - extremite).length < 1e-3:
+                    voisins[i] = tool.Ifc.get_object(mur)
     murs = []
     for a, b in zip(points, points[1:]):
         d = Vector(b) - Vector(a)
@@ -332,6 +363,11 @@ def creer_murs(points: list, z: float, epaisseur: float, hauteur: float) -> list
     paires = zip(murs, murs[1:] + murs[:1]) if ferme else zip(murs, murs[1:])
     for m1, m2 in paires:
         DumbWallJoiner().connect(m2, m1)
+    if not ferme:
+        if 0 in voisins:
+            DumbWallJoiner().connect(murs[0], voisins[0])
+        if len(points) - 1 in voisins:
+            DumbWallJoiner().connect(murs[-1], voisins[len(points) - 1])
     return murs
 
 
@@ -416,12 +452,15 @@ class _ReglagesOuverture:
     def draw(self, context):
         col = self.layout.column()
         col.use_property_split = True
-        for prop in ("largeur", "hauteur") + (("allege",) if self.avec_allege else ()):
+        for prop in ("modele", "largeur", "hauteur") + (("allege",) if self.avec_allege else ()) + ("retourner",):
             col.prop(self, prop)
 
     def _execute(self, context):
         allege = self.allege if self.avec_allege else 0.0
-        creer_ouverture(self.classe, tool.Ifc.get().by_id(self.mur), self.position, self.z, self.largeur, self.hauteur, allege)
+        creer_ouverture(
+            self.classe, tool.Ifc.get().by_id(self.mur), self.position, self.z,
+            self.largeur, self.hauteur, allege, self.modele, self.retourner,
+        )
         return {"FINISHED"}
 
 
@@ -430,6 +469,8 @@ class TRAME_OT_reglages_porte(_ReglagesOuverture, bpy.types.Operator, tool.Ifc.O
     bl_label = "Porte"
     bl_description = "Régler et poser la porte"
     classe = "IfcDoorType"
+    modele: bpy.props.EnumProperty(name="Ouverture", items=OUVERTURES_PORTE)
+    retourner: bpy.props.BoolProperty(name="Ouvrir de l'autre côté", default=False)
     largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=0.90, min=0.3, max=5)
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=2.10, min=0.5, max=5)
 
@@ -440,6 +481,8 @@ class TRAME_OT_reglages_fenetre(_ReglagesOuverture, bpy.types.Operator, tool.Ifc
     bl_description = "Régler et poser la fenêtre"
     classe = "IfcWindowType"
     avec_allege = True
+    modele: bpy.props.EnumProperty(name="Vantaux", items=VANTAUX_FENETRE)
+    retourner: bpy.props.BoolProperty(name="Ouvrir de l'autre côté", default=False)
     largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=1.20, min=0.2, max=10)
     hauteur: bpy.props.FloatProperty(name="Hauteur", unit="LENGTH", default=1.35, min=0.2, max=5)
     allege: bpy.props.FloatProperty(name="Allège", unit="LENGTH", default=0.90, min=0, max=5)

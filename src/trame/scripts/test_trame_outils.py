@@ -1,6 +1,7 @@
 # Test des outils Trame (mur, dalle, porte, fenêtre) : blender -b --python src/trame/scripts/test_trame_outils.py
 import bpy, math
 bpy.ops.preferences.addon_enable(module="bl_ext.user_default.trame")
+import json
 import trame.tool as tool, ifcopenshell.util.element as ue
 bpy.ops.bim.create_project()
 assert tool.Root.get_default_container(), "pas d'étage par défaut"
@@ -47,7 +48,7 @@ assert mur_sous_point(Vector((50, 50, 0)), 0) is None
 # Porte centrée à 3 m dans ce mur : le mur est percé, la porte fait 90 cm et commence à 2,55 m.
 bpy.ops.bim.trame_reglages_porte(mur=mur.id(), position=3.0, z=0, largeur=0.9, hauteur=2.1)
 (porte,) = f.by_type("IfcDoor")
-assert ue.get_type(porte).Name == "Porte 90 × 210"
+assert ue.get_type(porte).Name == "Porte 90 × 210 battante à gauche"
 assert len(f.by_type("IfcRelFillsElement")) == 1
 op = tool.Ifc.get_object(porte)
 # 90 cm de passage + chambranle de Bonsai de part et d'autre.
@@ -56,11 +57,24 @@ assert round(op.location.y, 2) == 4.55 and 0.9 <= round(op.dimensions.x, 2) <= 1
 # Fenêtre avec allège de 1 m.
 bpy.ops.bim.trame_reglages_fenetre(mur=mur.id(), position=1.0, z=0, largeur=1.0, hauteur=1.2, allege=1.0)
 (fenetre,) = f.by_type("IfcWindow")
-assert ue.get_type(fenetre).Name == "Fenêtre 100 × 120"
+assert ue.get_type(fenetre).Name == "Fenêtre 100 × 120 un vantail"
 assert len(f.by_type("IfcRelFillsElement")) == 2
 assert round(tool.Ifc.get_object(fenetre).location.z, 2) == 1.0
-import json
 assert json.loads(ue.get_pset(ue.get_type(fenetre), "BBIM_Window")["Data"])["overall_width"] == 1.0
+
+# Porte battante à droite, ouverte de l'autre côté du mur : type dédié, porte basculée.
+x_avant = tool.Ifc.get_object(porte).matrix_world.translation.x
+bpy.ops.bim.trame_reglages_porte(mur=mur.id(), position=4.3, z=0, largeur=0.8, hauteur=2.1, modele="SINGLE_SWING_RIGHT", retourner=True)
+porte2 = [d for d in f.by_type("IfcDoor") if d != porte][0]
+assert ue.get_type(porte2).Name == "Porte 80 × 210 battante à droite"
+assert json.loads(ue.get_pset(ue.get_type(porte2), "BBIM_Door")["Data"])["door_type"] == "SINGLE_SWING_RIGHT"
+assert len(f.by_type("IfcRelFillsElement")) == 3
+assert abs(tool.Ifc.get_object(porte2).matrix_world.translation.x - x_avant) > 0.05  # passée de l'autre côté
+
+# Mur accroché au bout d'un mur existant : raccordé automatiquement.
+liaisons = len(f.by_type("IfcRelConnectsPathElements"))
+bpy.ops.bim.trame_reglages_mur(points="1,7;5,7", z=0, longueur=4, angle=0, epaisseur=0.2, hauteur=2.5)
+assert len(f.by_type("IfcRelConnectsPathElements")) == liaisons + 1
 
 # Poteau 25 × 40 centré au point cliqué.
 bpy.ops.bim.trame_reglages_poteau(x=3, y=4, z=0, largeur=0.25, profondeur=0.4, hauteur=2.7)
