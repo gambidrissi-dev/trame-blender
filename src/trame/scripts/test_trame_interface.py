@@ -29,8 +29,9 @@ def verifier():
         # Vue en plan coupée à 1 m.
         bpy.ops.bim.trame_vue_plan()
         rv3d = area.spaces.active.region_3d
-        if not rv3d.use_clip_planes or round(rv3d.clip_planes[5][3], 2) != 1.0:
-            erreurs.append("plan non coupé à 1 m")
+        from trame.bim.module.model.trame_plan import est_vue_plan
+        if not est_vue_plan(area):
+            erreurs.append("vue en plan non active")
         if tuple(area.spaces.active.shading.background_color) != (1, 1, 1):
             erreurs.append("fond du plan non blanc")
         # 3D dans une fenêtre à part, non coupée.
@@ -38,7 +39,7 @@ def verifier():
         bpy.ops.bim.trame_ouvrir_3d()
         fen3d = bpy.context.window_manager.windows[-1]
         a3d = next(a for a in fen3d.screen.areas if a.type == "VIEW_3D")
-        if (len(bpy.context.window_manager.windows) != n + 1 or a3d.spaces.active.region_3d.use_clip_planes
+        if (len(bpy.context.window_manager.windows) != n + 1 or a3d.spaces.active.local_view is not None
                 or a3d.spaces.active.shading.background_type != "THEME"):
             erreurs.append("fenêtre 3D")
         # Coupe : fenêtre à part qui regarde par la caméra de coupe.
@@ -59,6 +60,21 @@ def verifier():
         erreurs.append("dessin du plan non installé")
     if len([c for c, _ in sections_etage(1.0) if c]) != 3:
         erreurs.append(f"sections : {sections_etage(1.0)}")
+    # Plan par étage : un mur du R+1 n'apparaît pas dans le plan du RDC, et inversement.
+    from trame.bim.module.model.trame_panneau import ajouter_etage, activer_etage, etages
+    with bpy.context.temp_override(window=fenetre, area=area, region=region):
+        rdc = tool.Root.get_default_container()
+        r1 = ajouter_etage("R+1", 2.8)
+        activer_etage(r1)
+        bpy.ops.bim.trame_reglages_mur(points="0,10;6,10", z=2.8, longueur=6, angle=0, epaisseur=0.2, hauteur=2.5)
+        mur_r1 = tool.Ifc.get_object(max(tool.Ifc.get().by_type("IfcWall"), key=lambda w: w.id()))
+        mur_rdc = tool.Ifc.get_object(min(tool.Ifc.get().by_type("IfcWall"), key=lambda w: w.id()))
+        espace = area.spaces.active
+        if not (mur_r1.local_view_get(espace) and not mur_rdc.local_view_get(espace)):
+            erreurs.append("plan du R+1 : visibilité")
+        activer_etage(rdc)
+        if not (mur_rdc.local_view_get(espace) and not mur_r1.local_view_get(espace)):
+            erreurs.append("plan du RDC : visibilité")
     # Panneau Trame enregistré et dessinable.
     if not hasattr(bpy.types, "TRAME_PT_panneau"):
         erreurs.append("panneau absent")

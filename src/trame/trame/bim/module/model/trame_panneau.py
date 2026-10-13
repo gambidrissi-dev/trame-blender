@@ -13,7 +13,8 @@ import trame.core.geometry
 import trame.core.root
 import trame.tool as tool
 
-from trame.bim.module.model.trame_plan import HAUTEUR_COUPE_PLAN
+from trame.bim.module.model.trame_plan import HAUTEUR_COUPE_PLAN, _vues_plan, est_vue_plan
+import ifcopenshell.util.element
 
 OUTILS = (
     ("builtin.select_box", "Sélection", "RESTRICT_SELECT_OFF"),
@@ -44,22 +45,91 @@ def vues_plan():
             yield area
 
 
-def appliquer_coupe_plan(area, z: float, active: bool = True) -> None:
-    """Coupe la vue à 1 m au-dessus de l'étage (et juste sous son sol) : on ne voit que l'étage, en plan."""
-    rv3d = area.spaces.active.region_3d
-    rv3d.use_clip_planes = active
+def objets_du_plan() -> set:
+    """Objets montrés dans le plan : ceux de l'étage actif, sauf les toits (dessinés en pointillés)."""
+    etage = tool.Root.get_default_container()
+    if not etage:
+        return set()
+    objets = set()
+    for element in ifcopenshell.util.element.get_decomposition(etage):
+        type_ = ifcopenshell.util.element.get_type(element)
+        toit = element.is_a("IfcRoof") or (element.is_a("IfcSlab") and "ROOF" in (
+            element.PredefinedType, getattr(type_, "PredefinedType", None)))
+        if not toit and (obj := tool.Ifc.get_object(element)):
+            objets.add(obj)
+    return objets
+
+
+def rafraichir_plan(area) -> None:
+    """Visibilité propre à la vue en plan (vue locale de Blender) : seul l'étage actif y apparaît ;
+    la fenêtre 3D, elle, montre tout. Le dessin du plan (coupes hachurées, masques) recouvre le reste."""
+    espace = area.spaces.active
+    visibles = objets_du_plan()
+    fenetre = next(w for w in bpy.context.window_manager.windows if area in w.screen.areas[:])
+    if espace.local_view is None:
+        # Entrer en vue locale demande un objet visible sélectionné : on prend un élément de l'étage,
+        # puis on rend la sélection. Étage encore vide : on attendra le premier élément créé.
+        selection, actif = list(bpy.context.selected_objects), bpy.context.view_layer.objects.active
+        repere = next((o for o in visibles if o.visible_get()), None)
+        if not repere:
+            return
+        for o in selection:
+            o.select_set(False)
+        repere.select_set(True)
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        with bpy.context.temp_override(window=fenetre, area=area, region=region):
+            bpy.ops.view3d.localview(frame_selected=False)
+        repere.select_set(False)
+        for o in selection:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = actif
+    for obj in bpy.context.view_layer.objects:
+        obj.local_view_set(espace, obj in visibles)
+    bpy.context.view_layer.update()
+    area.tag_redraw()
+
+
+def appliquer_coupe_plan(area, z: float = 0.0, active: bool = True) -> None:
+    """Met la zone en vue en plan : fond blanc, trait noir, seul l'étage actif (z n'est plus utilisé)."""
+    if active:
+        _vues_plan.add(area.as_pointer())
+    else:
+        _vues_plan.discard(area.as_pointer())
     # Fond blanc comme une feuille de plan ; la fenêtre 3D, elle, garde le fond de Blender.
     ombrage = area.spaces.active.shading
     ombrage.background_type = "VIEWPORT" if active else "THEME"
     ombrage.background_color = (1, 1, 1)
+    # Vision plan : ce qui est vu est blanc cerné de noir, comme un plan dessiné.
+    ombrage.type = "SOLID"
+    ombrage.light = "FLAT" if active else "STUDIO"
+    ombrage.color_type = "SINGLE" if active else "MATERIAL"
+    ombrage.single_color = (1, 1, 1)
+    ombrage.show_object_outline = active
+    ombrage.object_outline_color = (0, 0, 0)
+    # Couleurs « Standard » : le blanc reste blanc (la gestion AgX par défaut de Blender le grise).
+    bpy.context.scene.view_settings.view_transform = "Standard"
     if active:
-        loin = 1e5
-        # Plan (a, b, c, d) : un point reste visible si a·x + b·y + c·z + d ≥ 0.
-        rv3d.clip_planes = (
-            (1, 0, 0, loin), (-1, 0, 0, loin), (0, 1, 0, loin), (0, -1, 0, loin),
-            (0, 0, 1, -(z - 0.02)), (0, 0, -1, z + HAUTEUR_COUPE_PLAN),
-        )
+        rafraichir_plan(area)
     area.tag_redraw()
+
+
+def rafraichir_vues_plan() -> None:
+    for fenetre in bpy.context.window_manager.windows:
+        for area in fenetre.screen.areas:
+            if est_vue_plan(area):
+                rafraichir_plan(area)
+
+
+_nombre_objets = [0]
+
+
+@bpy.app.handlers.persistent
+def suivre_nouveaux_objets(scene, depsgraph=None):
+    """Un objet créé hors des outils Trame (par Bonsai, à l'import…) doit aussi apparaître dans le plan."""
+    if len(bpy.data.objects) != _nombre_objets[0]:
+        _nombre_objets[0] = len(bpy.data.objects)
+        if _vues_plan and tool.Ifc.get():
+            bpy.app.timers.register(lambda: rafraichir_vues_plan() and None, first_interval=0.05)
 
 
 def ajouter_etage(nom: str, hauteur: float):
@@ -82,10 +152,8 @@ def ajouter_etage(nom: str, hauteur: float):
 
 def activer_etage(etage) -> None:
     tool.Spatial.set_default_container(etage)
-    z = tool.Ifc.get_object(etage).location.z
-    for area in vues_plan():
-        if area.spaces.active.region_3d.use_clip_planes:
-            appliquer_coupe_plan(area, z)
+    if not bpy.app.background:
+        rafraichir_vues_plan()
 
 
 class TRAME_OT_activer_etage(bpy.types.Operator):
@@ -147,10 +215,13 @@ def nouvelle_fenetre_3d(context, camera=None) -> None:
             continue
         espace = area.spaces.active
         rv3d = espace.region_3d
-        rv3d.use_clip_planes = False  # la 3D montre tout le bâtiment
         espace.shading.background_type = "THEME"
+        espace.shading.light, espace.shading.color_type = "STUDIO", "MATERIAL"  # couleurs des matériaux
+        espace.shading.show_object_outline = False
         region = next(r for r in area.regions if r.type == "WINDOW")
         with context.temp_override(window=fenetre, area=area, region=region):
+            if espace.local_view:
+                bpy.ops.view3d.localview(frame_selected=False)  # la copie du plan hérite de sa vue locale
             if camera:
                 espace.use_local_camera = True
                 espace.camera = camera
@@ -206,6 +277,7 @@ class TRAME_PT_panneau(bpy.types.Panel):
             )
             op.etage = etage.id()
         layout.operator("bim.trame_ajouter_etage", icon="ADD")
+        layout.prop(context.scene, "trame_calque_fond", text="Afficher l'étage du dessous")
 
         layout.separator()
         layout.label(text="Vues")

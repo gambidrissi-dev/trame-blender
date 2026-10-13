@@ -191,4 +191,15 @@ basculer("Murs", "LayerOn")
 assert murs.LayerOn is True and not tool.Ifc.get_object(mur_bois).hide_get()
 basculer("Menuiseries", "LayerBlocked")
 assert tool.Ifc.get_object(porte).hide_select is True
+# Vision plan : étage du dessous, contour des toits, pointillés.
+from trame.bim.module.model.trame_plan import etage_inferieur, contours_toits, pointilles
+activer_etage(r1)
+assert etage_inferieur() == etages()[-1][0]
+activer_etage(etages()[-1][0])
+assert etage_inferieur() is None
+contours = contours_toits()  # 3 toits paramétriques + 1 toit-terrasse au RDC
+assert len(contours) == 4, len(contours)
+assert any(sorted((round(p.x, 2), round(p.y, 2)) for p in c) == [(0, 20), (0, 26), (10, 20), (10, 26)] for c in contours)
+tirets = pointilles([V((0, 0, 0)), V((1, 0, 0)), V((1, 1, 0)), V((0, 1, 0))], 0, tiret=0.25, vide=0.15)
+assert len(tirets) == 12 and all((b - a).length <= 0.2500001 for a, b in tirets)
 print("TEST OUTILS OK")

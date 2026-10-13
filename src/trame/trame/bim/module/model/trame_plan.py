@@ -13,15 +13,21 @@ import ifcopenshell.geom
 import ifcopenshell.api.spatial
 import ifcopenshell.util.element
 import ifcopenshell.util.representation
+import ifcopenshell.util.unit
 from bpy_extras import view3d_utils
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
-from mathutils.geometry import tessellate_polygon
+from mathutils.geometry import convex_hull_2d, tessellate_polygon
 
 import trame.core.root
 import trame.tool as tool
 
 HAUTEUR_COUPE_PLAN = 1.0  # le plan coupe à 1 m au-dessus de l'étage
+_vues_plan = set()  # zones 3D affichées en plan (pointeurs Blender)
+
+
+def est_vue_plan(area) -> bool:
+    return area is not None and area.as_pointer() in _vues_plan
 CLASSES_COUPEES = ("IfcWall", "IfcColumn")
 
 
@@ -194,9 +200,9 @@ def motif(element) -> str:
 _cache = {}
 
 
-def sections_etage(z_coupe: float) -> list:
-    """(contours, motif) de chaque mur/poteau de l'étage actif, coupé à z_coupe ; mis en cache."""
-    etage = tool.Root.get_default_container()
+def sections_etage(z_coupe: float, etage=None) -> list:
+    """(contours, motif) de chaque mur/poteau de l'étage (actif par défaut), coupé à z_coupe ; mis en cache."""
+    etage = etage or tool.Root.get_default_container()
     if not etage:
         return []
     resultat = []
@@ -249,6 +255,56 @@ def ouvertures_etage() -> list:
     return [e for e in ifcopenshell.util.element.get_decomposition(etage) if e.is_a("IfcDoor") or e.is_a("IfcWindow")]
 
 
+def etage_inferieur():
+    """Étage juste sous l'étage actif (None s'il est le plus bas)."""
+    actif = tool.Root.get_default_container()
+    if not actif or not (obj_actif := tool.Ifc.get_object(actif)):
+        return None
+    dessous = [
+        (o.location.z, e) for e in tool.Ifc.get().by_type("IfcBuildingStorey")
+        if (o := tool.Ifc.get_object(e)) and o.location.z < obj_actif.location.z - 1e-3
+    ]
+    return max(dessous, key=lambda x: x[0])[1] if dessous else None
+
+
+def contours_toits() -> list:
+    """Contours en plan des toits de l'étage actif (pour les dessiner en pointillés)."""
+    etage = tool.Root.get_default_container()
+    if not etage:
+        return []
+    contours = []
+    for element in ifcopenshell.util.element.get_decomposition(etage):
+        type_ = ifcopenshell.util.element.get_type(element)
+        est_toit = element.is_a("IfcRoof") or (element.is_a("IfcSlab") and "ROOF" in (
+            element.PredefinedType, getattr(type_, "PredefinedType", None)))
+        obj = tool.Ifc.get_object(element) if est_toit else None
+        if not obj or obj.type != "MESH" or obj.hide_get() or not obj.data.vertices:
+            continue
+        donnees = ifcopenshell.util.element.get_pset(element, "BBIM_Roof") or {}
+        if "Data" in donnees:  # toit paramétrique : son contour exact
+            unit_scale = ifcopenshell.util.unit.calculate_unit_scale(tool.Ifc.get())
+            sommets = json.loads(donnees["Data"])["path_data"]["verts"]
+            contours.append([obj.matrix_world @ (Vector(v) * unit_scale) for v in sommets])
+        else:  # toit-terrasse : enveloppe de ses sommets
+            pts = [obj.matrix_world @ v.co for v in obj.data.vertices]
+            enveloppe = convex_hull_2d([p.to_2d() for p in pts])
+            contours.append([pts[i] for i in enveloppe])
+    return contours
+
+
+def pointilles(contour: list, z: float, tiret: float = 0.25, vide: float = 0.15) -> list:
+    """Segments en tirets le long d'un contour fermé (longueurs en mètres)."""
+    segments = []
+    for a, b in zip(contour, contour[1:] + contour[:1]):
+        a, b = Vector((a.x, a.y, z)), Vector((b.x, b.y, z))
+        longueur, t = (b - a).length, 0.0
+        while t < longueur:
+            fin = min(t + tiret, longueur)
+            segments.append((a + (b - a) * (t / longueur), a + (b - a) * (fin / longueur)))
+            t = fin + vide
+    return segments
+
+
 # ---------------------------------------------------------------- Dessin dans la vue
 
 
@@ -257,13 +313,28 @@ def _shader():
 
 
 def dessiner_hachures():
-    rv3d = bpy.context.region_data
-    if not tool.Ifc.get() or not rv3d or not rv3d.use_clip_planes:
-        return  # seulement dans la vue en plan (coupée)
+    if not tool.Ifc.get() or not est_vue_plan(bpy.context.area):
+        return  # seulement dans la vue en plan
     z = tool.Root.get_default_container_elevation() + HAUTEUR_COUPE_PLAN - 0.001
     shader = _shader()
     gpu.state.depth_test_set("NONE")
     gpu.state.blend_set("ALPHA")
+    scene = bpy.context.scene
+    # Étage inférieur en calque de fond : ses murs coupés, en gris clair, sous le dessin de l'étage.
+    if getattr(scene, "trame_calque_fond", True) and (dessous := etage_inferieur()):
+        z_dessous = tool.Ifc.get_object(dessous).location.z + HAUTEUR_COUPE_PLAN
+        trace = [Vector((p.x, p.y, z)) for contours, _ in sections_etage(z_dessous, dessous)
+                for c in contours for a, b in zip(c, c[1:] + c[:1]) for p in (a, b)]
+        if trace:
+            gpu.state.line_width_set(1)
+            shader.uniform_float("color", (0.72, 0.72, 0.72, 1))
+            batch_for_shader(shader, "LINES", {"pos": trace}).draw(shader)
+    # Toits de l'étage : contour en pointillés (ils sont au-dessus du plan de coupe).
+    tirets = [p for c in contours_toits() for s in pointilles(c, z) for p in s]
+    if tirets:
+        gpu.state.line_width_set(1.5)
+        shader.uniform_float("color", (0.15, 0.15, 0.15, 1))
+        batch_for_shader(shader, "LINES", {"pos": tirets}).draw(shader)
     # Portes et fenêtres : l'ouverture est masquée en blanc sur toute l'épaisseur du mur (on ne voit plus
     # l'allège ni le seuil sous le plan de coupe), les murs sont dessinés par-dessus, puis le symbole.
     symboles = []

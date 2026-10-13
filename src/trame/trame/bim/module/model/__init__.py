@@ -398,6 +398,10 @@ def register():
 
     workspace.load_custom_icons()
     trame_plan.installer()  # cotes et murs hachurés dans la vue en plan
+    bpy.app.handlers.depsgraph_update_post.append(trame_panneau.suivre_nouveaux_objets)
+    bpy.types.Scene.trame_calque_fond = bpy.props.BoolProperty(
+        name="Étage du dessous", default=True, description="Montrer en gris les murs de l'étage du dessous"
+    )
 
 
 def unregister():
@@ -407,6 +411,9 @@ def unregister():
     # half-unloaded module state.
     opening.DecorationsHandler.uninstall()
     trame_plan.desinstaller()
+    if trame_panneau.suivre_nouveaux_objets in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(trame_panneau.suivre_nouveaux_objets)
+    del bpy.types.Scene.trame_calque_fond
 
     # Network path overlays attach SpaceView3D draw handlers on toggle;
     # uninstall here so addon disable / Blender shutdown doesn't leak them.
