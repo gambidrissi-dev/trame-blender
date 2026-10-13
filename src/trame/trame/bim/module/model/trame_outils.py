@@ -346,20 +346,28 @@ def decaler_contour(points: list, distance: float) -> list:
 
 
 def contour_des_murs(z: float, etage=None) -> list:
-    """Contour extérieur des murs de l'étage (actif par défaut), lu à 1 m au-dessus du sol."""
+    """Contour extérieur des murs de l'étage (actif par défaut), portes et fenêtres ignorées.
+
+    Chaque mur compte pour le rectangle compris entre ses deux faces (sans ses ouvertures) : le tour est donc
+    fermé même avec des portes, et les angles rentrants d'une maison en L sont respectés."""
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
-    from trame.bim.module.model.trame_plan import section
 
     etage = etage or tool.Root.get_default_container()
-    polygones = []
+    rectangles = []
     for element in ifcopenshell.util.element.get_decomposition(etage):
-        if element.is_a("IfcWall") and (obj := tool.Ifc.get_object(element)):
-            polygones += [Polygon([(p.x, p.y) for p in c]).buffer(0.002) for c in section(obj, z + 1.0) if len(c) >= 3]
-    if not polygones:
+        if not element.is_a("IfcWall") or not (obj := tool.Ifc.get_object(element)) or obj.type != "MESH":
+            continue
+        couches = tool.Model.get_material_layer_parameters(ifcopenshell.util.element.get_type(element) or element)
+        if not couches["thickness"]:
+            continue
+        faces = tool.Model.get_wall_axis(obj, layers=couches)
+        (a, b), (c, d) = faces["base"], faces["side"]
+        rectangles.append(Polygon([tuple(a), tuple(b), tuple(d), tuple(c)]).buffer(0.002, join_style=2))
+    if not rectangles:
         return []
-    union = unary_union(polygones)
-    plus_grand = max(getattr(union, "geoms", [union]), key=lambda g: g.area)
+    union = unary_union(rectangles).buffer(-0.002, join_style=2)  # la petite marge soudait les murs entre eux
+    plus_grand = max(getattr(union, "geoms", [union]), key=lambda g: Polygon(g.exterior).area)  # emprise
     # Pas de trous : l'enveloppe extérieure, simplifiée pour retirer les points alignés.
     return [tuple(c) for c in Polygon(plus_grand.exterior).simplify(0.005).exterior.coords[:-1]]
 
@@ -1021,7 +1029,8 @@ class TRAME_OT_dessiner(bpy.types.Operator):
 
     element: bpy.props.EnumProperty(
         items=(("MUR", "Mur", ""), ("DALLE", "Dalle", ""), ("TOIT", "Toit", ""), ("ESCALIER", "Escalier", ""),
-               ("COUPE", "Coupe", ""), ("COTE", "Cote", ""))
+               ("COUPE", "Coupe", ""), ("COTE", "Cote", ""),
+               ("TERRAIN", "Terrain", ""))
     )
 
     @classmethod
@@ -1141,6 +1150,12 @@ class TRAME_OT_dessiner(bpy.types.Operator):
         self.terminer(context)
         pts = self.points[:]
         texte = ";".join(f"{p.x:.6f},{p.y:.6f}" for p in pts)
+        if self.element == "TERRAIN":
+            if len(pts) < 3:
+                self.report({"WARNING"}, "Il faut au moins 3 points pour un contour")
+                return {"CANCELLED"}
+            bpy.ops.bim.trame_reglages_terrain("INVOKE_DEFAULT", points=texte)
+            return {"FINISHED"}
         if self.element in {"DALLE", "TOIT"}:
             if len(pts) < 3:
                 self.report({"WARNING"}, "Il faut au moins 3 points pour un contour")

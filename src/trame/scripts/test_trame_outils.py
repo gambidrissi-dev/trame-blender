@@ -276,4 +276,43 @@ centre = sum((ov.matrix_world @ V(c) for c in ov.bound_box), V()) / 8
 assert abs(centre.x - 24) < 0.05 and abs(centre.y - 71.5) < 0.1, centre
 assert calque_de(velux).Name == "Menuiseries"
 activer_etage(etages()[-1][0])
+# Terrain : lecture d'un relevé, triangulation, import en IFC, plateforme, courbes de niveau.
+from trame.bim.module.model.trame_terrain import lire_points, trianguler, courbes_de_niveau
+assert lire_points("x;y;z\n1;2;3,5\n# commentaire\n4\t5\t6\nP7 7 8 9\n10,11,12") == [(1, 2, 3.5), (4, 5, 6), (7, 8, 9), (10, 11, 12)]
+pyramide = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0), (5, 5, 2)]
+sommets, triangles = trianguler(pyramide)
+assert len(sommets) == 5 and len(triangles) == 4
+import tempfile, os
+chemin = os.path.join(tempfile.gettempdir(), "trame_releve_test.csv")
+with open(chemin, "w") as fichier:
+    fichier.write("x;y;z\n" + "\n".join(";".join(str(c).replace(".", ",") for c in p_) for p_ in pyramide))
+geo_avant = set(f.by_type("IfcGeographicElement"))
+bpy.ops.bim.trame_importer_releve(filepath=chemin)
+(terrain,) = set(f.by_type("IfcGeographicElement")) - geo_avant
+assert terrain.PredefinedType == "TERRAIN" and ue.get_container(terrain).is_a("IfcSite") and calque_de(terrain).Name == "Terrain"
+to_ = tool.Ifc.get_object(terrain)
+assert len(to_.data.vertices) == 5 and round(max(v.co.z for v in to_.data.vertices), 3) == 2
+courbes = courbes_de_niveau(to_, 0.5)
+assert courbes and {round(a.z, 3) for a, b in courbes} == {0.5, 1.0, 1.5}, {round(a.z, 3) for a, b in courbes}
+bpy.ops.bim.trame_reglages_terrain(points="0,0;20,0;20,15;0,15", altitude=-0.5)
+plateforme = tool.Ifc.get_object(max(f.by_type("IfcGeographicElement"), key=lambda e: e.id()))
+assert {round(v.co.z, 3) for v in plateforme.data.vertices} == {-0.5}
+# Les courbes de niveau s'arrêtent au bâtiment : un segment qui traverse le R+1 (20..28 × 70..76) est coupé.
+from trame.bim.module.model.trame_plan import hors_batiment
+activer_etage(r1)
+coupe_ = hors_batiment([(V((10, 73, 0)), V((40, 73, 0)))])
+assert len(coupe_) == 2 and sorted(round(b.x, 1) for a, b in coupe_)[0] == 20.0, [(a.x, b.x) for a, b in coupe_]
+activer_etage(etages()[-1][0])
+# Contour des murs malgré une porte et une baie : le tour est complet (bug corrigé).
+bpy.ops.bim.trame_reglages_mur(points="60,0;70,0;70,8;60,8;60,0", z=0, epaisseur=0.3, hauteur=2.5)
+m_, p_ = mur_sous_point(V((65, 0.1, 0)), 0)
+bpy.ops.bim.trame_reglages_porte(mur=m_.id(), position=p_, z=0, largeur=0.9, hauteur=2.1)
+m_, p_ = mur_sous_point(V((70.1, 4, 0)), 0)
+bpy.ops.bim.trame_reglages_fenetre(mur=m_.id(), position=p_, z=0, largeur=2.4, hauteur=2.1, allege=0)
+from shapely.geometry import Polygon as P_
+tour = [c for c in [contour_des_murs(0)] if c][0]
+xs, ys = [q[0] for q in tour], [q[1] for q in tour]
+assert (round(min(xs), 2), round(max(xs), 2), round(min(ys), 2), round(max(ys), 2)) == (60, 70, 0, 8), tour
+assert round(P_(tour).area, 1) == 80.0, P_(tour).area  # l'intérieur des pièces est dans l'emprise
+assert len(hors_batiment([(V((55, 4, 0)), V((75, 4, 0)))])) == 2
 print("TEST OUTILS OK")

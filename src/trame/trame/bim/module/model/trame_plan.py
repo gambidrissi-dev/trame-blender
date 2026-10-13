@@ -305,6 +305,58 @@ def contours_toits() -> list:
     return contours
 
 
+_cache_courbes = {}
+
+
+def courbes_terrain() -> list:
+    """Courbes de niveau de tous les terrains du projet (mises en cache par maillage)."""
+    from trame.bim.module.model.trame_terrain import courbes_de_niveau
+
+    segments = []
+    for element in tool.Ifc.get().by_type("IfcGeographicElement"):
+        obj = tool.Ifc.get_object(element)
+        if not obj or obj.type != "MESH" or obj.hide_get():
+            continue
+        cle = (obj.data.as_pointer(), len(obj.data.vertices), tuple(round(v, 5) for r in obj.matrix_world for v in r))
+        if cle not in _cache_courbes:
+            _cache_courbes[cle] = courbes_de_niveau(obj, 0.5)
+        segments += _cache_courbes[cle]
+    return segments
+
+
+_cache_emprise = {}
+
+
+def hors_batiment(segments: list) -> list:
+    """Retire des segments la partie qui passe sous le bâtiment (contour extérieur des murs de l'étage)."""
+    from shapely.geometry import LineString, Polygon
+    from trame.bim.module.model.trame_outils import contour_des_murs
+
+    etage = tool.Root.get_default_container()
+    if not segments or not etage:
+        return segments
+    murs = tuple(sorted(
+        (o.name, round(o.matrix_world.translation.x, 3), round(o.matrix_world.translation.y, 3), len(o.data.vertices))
+        for e in ifcopenshell.util.element.get_decomposition(etage)
+        if e.is_a("IfcWall") and (o := tool.Ifc.get_object(e)) and o.type == "MESH"
+    ))
+    if (etage.id(), murs) not in _cache_emprise:
+        _cache_emprise.clear()
+        contour = contour_des_murs(tool.Ifc.get_object(etage).location.z, etage) if murs else []
+        _cache_emprise[(etage.id(), murs)] = Polygon(contour) if len(contour) >= 3 else None
+    emprise = _cache_emprise[(etage.id(), murs)]
+    if emprise is None:
+        return segments
+    resultat = []
+    for a, b in segments:
+        reste = LineString([(a.x, a.y), (b.x, b.y)]).difference(emprise)
+        for morceau in getattr(reste, "geoms", [reste]):
+            if not morceau.is_empty and morceau.geom_type == "LineString":
+                (x0, y0), (x1, y1) = morceau.coords[0], morceau.coords[-1]
+                resultat.append((Vector((x0, y0, a.z)), Vector((x1, y1, a.z))))
+    return resultat
+
+
 def pointilles(contour: list, z: float, tiret: float = 0.25, vide: float = 0.15) -> list:
     """Segments en tirets le long d'un contour fermé (longueurs en mètres)."""
     segments = []
@@ -342,6 +394,13 @@ def dessiner_hachures():
             gpu.state.line_width_set(1)
             shader.uniform_float("color", (0.72, 0.72, 0.72, 1))
             batch_for_shader(shader, "LINES", {"pos": trace}).draw(shader)
+    # Terrain : courbes de niveau tous les 50 cm, sur le plan de l'étage le plus bas.
+    if etage_inferieur() is None:
+        courbes = [Vector((p.x, p.y, z)) for seg in hors_batiment(courbes_terrain()) for p in seg]
+        if courbes:
+            gpu.state.line_width_set(1)
+            shader.uniform_float("color", (0.55, 0.40, 0.25, 1))
+            batch_for_shader(shader, "LINES", {"pos": courbes}).draw(shader)
     # Toits de l'étage : contour en pointillés (ils sont au-dessus du plan de coupe).
     tirets = [p for c in contours_toits() for s in pointilles(c, z) for p in s]
     if tirets:

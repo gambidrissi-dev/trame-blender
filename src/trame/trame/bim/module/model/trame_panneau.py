@@ -26,6 +26,7 @@ OUTILS = (
     ("bim.window_tool", "Fenêtre", "VIEW_ORTHO"),
     ("bim.stair_flight_tool", "Escalier", "SORTSIZE"),
     ("bim.trame_velux_tool", "Velux", "MOD_LATTICE"),
+    ("bim.trame_terrain_tool", "Terrain", "RNDCURVE"),
 )
 
 
@@ -270,6 +271,7 @@ class TRAME_PT_panneau(bpy.types.Panel):
         ligne = layout.row(align=True)
         ligne.operator("bim.trame_sur_les_murs", text="Toit sur les murs", icon="MOD_TRIANGULATE").element = "TOIT"
         ligne.operator("bim.trame_sur_les_murs", text="Dalle sur les murs", icon="MESH_PLANE").element = "DALLE"
+        layout.operator("bim.trame_importer_releve", text="Importer un relevé (points x y z)", icon="IMPORT")
 
         layout.separator()
         layout.label(text="Étages")

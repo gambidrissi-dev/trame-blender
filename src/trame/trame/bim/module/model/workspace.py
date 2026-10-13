@@ -162,6 +162,19 @@ class TrameVeluxTool(WorkSpaceTool):
     bl_keymap = (("bim.trame_poser_velux", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": []}),)
 
 
+class TrameTerrainTool(WorkSpaceTool):
+    bl_space_type = "VIEW_3D"
+    bl_context_mode = "OBJECT"
+    bl_idname = "bim.trame_terrain_tool"
+    bl_label = "Outil Terrain"
+    bl_description = "Cliquez le contour du terrain, puis donnez son altitude (pour un relevé : panneau Trame › Importer un relevé)"
+    bl_icon = "ops.sculpt.mesh_filter"
+    bl_widget = None
+    bl_keymap = (
+        ("bim.trame_dessiner", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": [("element", "TERRAIN")]}),
+    )
+
+
 class RailingTool(BimTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
