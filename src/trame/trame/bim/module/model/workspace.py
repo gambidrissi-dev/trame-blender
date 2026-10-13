@@ -151,6 +151,17 @@ class TrameCoteTool(WorkSpaceTool):
     )
 
 
+class TrameVeluxTool(WorkSpaceTool):
+    bl_space_type = "VIEW_3D"
+    bl_context_mode = "OBJECT"
+    bl_idname = "bim.trame_velux_tool"
+    bl_label = "Outil Velux"
+    bl_description = "Cliquez dans un toit en pente (en pointillés dans le plan) pour y poser une fenêtre de toit"
+    bl_icon = "ops.generic.select_box"
+    bl_widget = None
+    bl_keymap = (("bim.trame_poser_velux", {"type": "LEFTMOUSE", "value": "PRESS"}, {"properties": []}),)
+
+
 class RailingTool(BimTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"

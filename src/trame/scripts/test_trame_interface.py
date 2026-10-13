@@ -20,11 +20,11 @@ def verifier():
             if hasattr(premier, "idname"):
                 ids.append(premier.idname)
         archi = [i for i in ids if i in ("bim.wall_tool", "bim.slab_tool", "bim.roof_tool", "bim.column_tool",
-                                           "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_coupe_tool",
-                                           "bim.trame_cote_tool")]
+                                           "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_velux_tool",
+                                           "bim.trame_coupe_tool", "bim.trame_cote_tool")]
         if archi != ["bim.wall_tool", "bim.slab_tool", "bim.roof_tool", "bim.column_tool",
-                     "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_coupe_tool",
-                     "bim.trame_cote_tool"]:
+                     "bim.door_tool", "bim.window_tool", "bim.stair_flight_tool", "bim.trame_velux_tool",
+                     "bim.trame_coupe_tool", "bim.trame_cote_tool"]:
             erreurs.append(f"boîte à outils : {archi}")
         # Vue en plan coupée à 1 m.
         bpy.ops.bim.trame_vue_plan()

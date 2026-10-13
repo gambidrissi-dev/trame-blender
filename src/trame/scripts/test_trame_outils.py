@@ -252,4 +252,28 @@ for forme, attendu_x, attendu_y in (("L_GAUCHE", None, None), ("U_DROITE", None,
         assert tuple(round(c, 3) for c in regard2) == (-1, 0, 0), regard2  # demi-tour
         bb2 = [o2.matrix_world @ V(c) for c in o2.bound_box]
         assert max(v.y for v in bb2) <= -0.49, "en U à droite, la 2e volée est du côté droit (-Y)"
+# Velux dans le pan sud du toit « sur les murs » du R+1 : posé dans la pente, centré, toit percé.
+from trame.bim.module.model.trame_plan import dans_un_toit, ouvertures_etage
+from trame.bim.module.model.trame_outils import pan_sous_point
+activer_etage(r1)
+fen_avant = set(f.by_type("IfcWindow"))
+assert pan_sous_point(24, 50) is None
+bpy.ops.bim.trame_reglages_velux(x=24, y=50, largeur=0.78, hauteur=0.98)  # hors toit : rien n'est créé
+assert set(f.by_type("IfcWindow")) == fen_avant
+pan_point, pan_normale = pan_sous_point(24, 71.5)[1:]
+bpy.ops.bim.trame_reglages_velux(x=24, y=71.5, largeur=0.78, hauteur=0.98)
+(velux,) = set(f.by_type("IfcWindow")) - fen_avant
+assert pan_sous_point(24, 71.5) is None or pan_sous_point(24, 71.5)[1].z < pan_point.z - 0.1  # le toit est percé là
+assert ue.get_type(velux).Name == "Velux 78 × 98" and ue.get_type(velux).PredefinedType == "SKYLIGHT"
+assert dans_un_toit(velux) and velux not in ouvertures_etage()
+assert velux.FillsVoids[0].RelatingOpeningElement.VoidsElements[0].RelatingBuildingElement == toit
+ov = tool.Ifc.get_object(velux)
+monte = ov.matrix_world.to_3x3() @ V((0, 0, 1))
+assert round(math.degrees(math.asin(monte.z))) == 30, monte  # l'axe qui monte la fenêtre suit la pente de 30°
+assert abs((ov.matrix_world.to_3x3() @ V((0, 1, 0))).dot(pan_normale) + 1) < 1e-3  # profondeur vers l'intérieur
+assert all(abs((ov.matrix_world @ V(c) - pan_point).dot(pan_normale)) < 0.3 for c in ov.bound_box)  # dans le pan
+centre = sum((ov.matrix_world @ V(c) for c in ov.bound_box), V()) / 8
+assert abs(centre.x - 24) < 0.05 and abs(centre.y - 71.5) < 0.1, centre
+assert calque_de(velux).Name == "Menuiseries"
+activer_etage(etages()[-1][0])
 print("TEST OUTILS OK")

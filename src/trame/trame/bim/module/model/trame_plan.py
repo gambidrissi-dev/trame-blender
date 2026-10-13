@@ -248,11 +248,18 @@ def emprise(obj, z: float, marge_y: float = 0.0) -> list:
     return [Vector((p.x, p.y, z)) for p in monde]
 
 
+def dans_un_toit(element) -> bool:
+    return any(r.RelatingOpeningElement.VoidsElements and r.RelatingOpeningElement.VoidsElements[0]
+               .RelatingBuildingElement.is_a("IfcRoof") for r in getattr(element, "FillsVoids", []) or [])
+
+
 def ouvertures_etage() -> list:
+    """Portes et fenêtres de l'étage posées dans des murs (les Velux sont dessinés avec le toit)."""
     etage = tool.Root.get_default_container()
     if not etage:
         return []
-    return [e for e in ifcopenshell.util.element.get_decomposition(etage) if e.is_a("IfcDoor") or e.is_a("IfcWindow")]
+    return [e for e in ifcopenshell.util.element.get_decomposition(etage)
+            if (e.is_a("IfcDoor") or e.is_a("IfcWindow")) and not dans_un_toit(e)]
 
 
 def etage_inferieur():
@@ -287,6 +294,12 @@ def contours_toits() -> list:
             contours.append([obj.matrix_world @ (Vector(v) * unit_scale) for v in sommets])
         else:  # toit-terrasse : enveloppe de ses sommets
             pts = [obj.matrix_world @ v.co for v in obj.data.vertices]
+            enveloppe = convex_hull_2d([p.to_2d() for p in pts])
+            contours.append([pts[i] for i in enveloppe])
+    # Velux : leur emprise en plan, en pointillés comme le toit qui les porte.
+    for element in ifcopenshell.util.element.get_decomposition(etage):
+        if element.is_a("IfcWindow") and dans_un_toit(element) and (obj := tool.Ifc.get_object(element)):
+            pts = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
             enveloppe = convex_hull_2d([p.to_2d() for p in pts])
             contours.append([pts[i] for i in enveloppe])
     return contours

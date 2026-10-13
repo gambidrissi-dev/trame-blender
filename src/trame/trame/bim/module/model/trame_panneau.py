@@ -25,6 +25,7 @@ OUTILS = (
     ("bim.door_tool", "Porte", "MESH_GRID"),
     ("bim.window_tool", "Fenêtre", "VIEW_ORTHO"),
     ("bim.stair_flight_tool", "Escalier", "SORTSIZE"),
+    ("bim.trame_velux_tool", "Velux", "MOD_LATTICE"),
 )
 
 

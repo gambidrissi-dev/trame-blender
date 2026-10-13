@@ -43,7 +43,7 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | 19 | Vision plan : trait noir sur blanc (vu en traits), étage inférieur en calque de fond, toit du dessus en pointillés | fait |
 | 20 | Toiture : débord, toit tracé sur le contour des murs | fait |
 | 21 | Escaliers : en L et en U avec palier | fait |
-| 22 | Velux : fenêtre de toit posée dans le pan, toit percé | |
+| 22 | Velux : fenêtre de toit posée dans le pan, toit percé | fait |
 | 23 | Terrain : maillage à partir de points cotés (triangulation), en IFC | |
 | 24 | IA : assistant Trame qui construit à partir d'une demande en français (API Claude) | |
 | 25 | Tests de bout en bout étendus + publication | |

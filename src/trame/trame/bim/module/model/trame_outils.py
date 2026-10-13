@@ -176,14 +176,18 @@ OUVERTURES_PORTE = (
 VANTAUX_FENETRE = (("SINGLE_PANEL", "Un vantail", ""), ("DOUBLE_PANEL_VERTICAL", "Deux vantaux", ""))
 
 
-def type_d_ouverture(classe: str, largeur: float, hauteur: float, modele: str = "") -> ifcopenshell.entity_instance:
-    """Retrouve ou crée le type paramétrique « Porte 90 × 210 … » / « Fenêtre 120 × 135 … » de Bonsai."""
+def type_d_ouverture(
+    classe: str, largeur: float, hauteur: float, modele: str = "", velux: bool = False
+) -> ifcopenshell.entity_instance:
+    """Retrouve ou crée le type paramétrique « Porte 90 × 210 … » / « Fenêtre 120 × 135 … » / « Velux 78 × 98 »."""
     f = tool.Ifc.get()
     porte = classe == "IfcDoorType"
     modeles = OUVERTURES_PORTE if porte else VANTAUX_FENETRE
     modele = modele or modeles[0][0]
     libelle = next(m[1] for m in modeles if m[0] == modele).lower()
     nom = f"{'Porte' if porte else 'Fenêtre'} {largeur * 100:g} × {hauteur * 100:g} {libelle}"
+    if velux:
+        nom = f"Velux {largeur * 100:g} × {hauteur * 100:g}"
     for t in f.by_type(classe):
         if t.Name == nom:
             return t
@@ -201,6 +205,8 @@ def type_d_ouverture(classe: str, largeur: float, hauteur: float, modele: str = 
     bpy.ops.bim.add_element(skip_dialog=True)
     (nouveau,) = set(f.by_type(classe)) - avant
     nouveau.Name = nom
+    if velux:
+        nouveau.PredefinedType = "SKYLIGHT"
     return nouveau
 
 
@@ -482,6 +488,54 @@ def creer_coupe(depart, arrivee, nom: str, profondeur: float):
     camera.name = nom
     trame.core.geometry.edit_object_placement(tool.Ifc, tool.Geometry, tool.Surveyor, obj=camera)
     return camera
+
+
+def pan_sous_point(x: float, y: float):
+    """Toit et point du pan au-dessus de (x, y) : (objet toit, point, normale vers l'extérieur) ou None."""
+    meilleur = None
+    for element in tool.Ifc.get().by_type("IfcRoof"):
+        obj = tool.Ifc.get_object(element)
+        if not obj or obj.type != "MESH":
+            continue
+        inverse = obj.matrix_world.inverted()
+        # Rayon lancé d'en haut : on touche le dessus du toit, pas sa sous-face.
+        touche, point, normale, _ = obj.ray_cast(inverse @ Vector((x, y, 1e4)), inverse.to_3x3() @ Vector((0, 0, -1)))
+        if not touche:
+            continue
+        point = obj.matrix_world @ point
+        normale = (obj.matrix_world.to_3x3() @ normale).normalized()
+        if normale.z > 0.05 and (meilleur is None or point.z > meilleur[1].z):
+            meilleur = (obj, point, normale)
+    return meilleur
+
+
+def creer_velux(x: float, y: float, largeur: float, hauteur: float):
+    """Fenêtre de toit posée dans le pan sous le clic, centrée sur lui ; le toit est percé."""
+    from trame.bim.module.model.opening import FilledOpeningGenerator
+
+    trouve = pan_sous_point(x, y)
+    if not trouve:
+        return None
+    toit, point, normale = trouve
+    type_ = type_d_ouverture("IfcWindowType", largeur, hauteur, velux=True)
+    selectionner_seul(None)
+    avant = set(tool.Ifc.get().by_type("IfcWindow"))
+    bpy.ops.bim.add_occurrence(relating_type_id=type_.id())
+    (velux,) = set(tool.Ifc.get().by_type("IfcWindow")) - avant
+    obj = tool.Ifc.get_object(velux)
+    # Repère de la fenêtre : X horizontal dans le pan, Y vers l'intérieur du toit, Z qui monte la pente.
+    axe_x = normale.cross(Vector((0, 0, 1))).normalized()
+    axe_y = -normale
+    axe_z = axe_x.cross(axe_y).normalized()
+    if axe_z.z < 0:
+        axe_x, axe_z = -axe_x, -axe_z
+    repere = Matrix((axe_x, axe_y, axe_z)).transposed().to_4x4()
+    repere.translation = point - axe_x * largeur / 2 - axe_z * hauteur / 2  # origine Bonsai : coin bas gauche
+    obj.matrix_world = repere
+    bpy.context.view_layer.update()
+    trame.core.geometry.edit_object_placement(tool.Ifc, tool.Geometry, tool.Surveyor, obj=obj)
+    FilledOpeningGenerator().generate(obj, toit, preserve_placement=True)  # garder l'inclinaison du pan
+    return obj
 
 
 def creer_mur(x: float, y: float, z: float, longueur: float, angle_deg: float, epaisseur: float, hauteur: float,
@@ -813,6 +867,53 @@ class TRAME_OT_sur_les_murs(bpy.types.Operator):
             bpy.ops.bim.trame_reglages_toit("INVOKE_DEFAULT", points=texte, z=z, depart=max(hauts, default=2.5))
         else:
             bpy.ops.bim.trame_reglages_dalle("INVOKE_DEFAULT", points=texte, z=z)
+        return {"FINISHED"}
+
+
+class TRAME_OT_reglages_velux(bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.trame_reglages_velux"
+    bl_label = "Velux"
+    bl_description = "Régler et poser la fenêtre de toit"
+    bl_options = {"REGISTER", "UNDO"}
+
+    x: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+    y: bpy.props.FloatProperty(options={"HIDDEN", "SKIP_SAVE"})
+    largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=0.78, min=0.3, max=3)
+    hauteur: bpy.props.FloatProperty(name="Hauteur (dans la pente)", unit="LENGTH", default=0.98, min=0.3, max=3)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, title="Velux", confirm_text="Créer")
+
+    def draw(self, context):
+        col = self.layout.column()
+        col.use_property_split = True
+        col.prop(self, "largeur")
+        col.prop(self, "hauteur")
+
+    def _execute(self, context):
+        if not creer_velux(self.x, self.y, self.largeur, self.hauteur):
+            self.report({"WARNING"}, "Cliquez à l'intérieur d'un toit en pente")
+            return {"CANCELLED"}
+        apres_creation()
+        return {"FINISHED"}
+
+
+class TRAME_OT_poser_velux(bpy.types.Operator):
+    bl_idname = "bim.trame_poser_velux"
+    bl_label = "Poser un Velux"
+    bl_description = "Cliquez dans le toit (en pointillés dans le plan) à l'endroit du centre de la fenêtre de toit"
+    bl_options = {"REGISTER"}
+
+    @classmethod
+    def poll(cls, context):
+        return tool.Ifc.get() is not None and context.area and context.area.type == "VIEW_3D"
+
+    def invoke(self, context, event):
+        point = point_sous_souris(context, event, niveau_etage())
+        if point is None or not pan_sous_point(point.x, point.y):
+            self.report({"WARNING"}, "Cliquez à l'intérieur d'un toit en pente")
+            return {"CANCELLED"}
+        bpy.ops.bim.trame_reglages_velux("INVOKE_DEFAULT", x=point.x, y=point.y)
         return {"FINISHED"}
 
 
