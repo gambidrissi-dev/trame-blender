@@ -325,11 +325,44 @@ def angles_pignons(points: list, forme: str) -> list:
     return [0.0] * n
 
 
+def decaler_contour(points: list, distance: float) -> list:
+    """Contour agrandi (distance > 0) ou réduit, angles vifs conservés."""
+    from shapely.geometry import Polygon
+
+    poly = Polygon([(p[0], p[1]) for p in points]).buffer(distance, join_style=2, mitre_limit=10)
+    return [tuple(c) for c in poly.exterior.coords[:-1]]
+
+
+def contour_des_murs(z: float, etage=None) -> list:
+    """Contour extérieur des murs de l'étage (actif par défaut), lu à 1 m au-dessus du sol."""
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    from trame.bim.module.model.trame_plan import section
+
+    etage = etage or tool.Root.get_default_container()
+    polygones = []
+    for element in ifcopenshell.util.element.get_decomposition(etage):
+        if element.is_a("IfcWall") and (obj := tool.Ifc.get_object(element)):
+            polygones += [Polygon([(p.x, p.y) for p in c]).buffer(0.002) for c in section(obj, z + 1.0) if len(c) >= 3]
+    if not polygones:
+        return []
+    union = unary_union(polygones)
+    plus_grand = max(getattr(union, "geoms", [union]), key=lambda g: g.area)
+    # Pas de trous : l'enveloppe extérieure, simplifiée pour retirer les points alignés.
+    return [tuple(c) for c in Polygon(plus_grand.exterior).simplify(0.005).exterior.coords[:-1]]
+
+
 def creer_toit(points: list, z: float, forme: str, pente_deg: float, epaisseur: float, depart: float,
-               nom_materiau: str = "Béton"):
-    """Toit sur le contour dessiné, posé à « depart » mètres au-dessus de l'étage."""
+               nom_materiau: str = "Béton", debord: float = 0.0):
+    """Toit sur le contour dessiné, posé à « depart » mètres au-dessus de l'étage.
+
+    Avec un débord, le contour est agrandi et le toit abaissé pour que la pente passe au droit du contour."""
     if points[0] == points[-1]:
         points = points[:-1]
+    if debord > 0:
+        points = decaler_contour(points, debord)
+        if forme != "PLAT":
+            depart -= debord * math.tan(math.radians(pente_deg))
     if forme == "PLAT":
         return creer_dalle(points, z + depart, epaisseur, type_de_dalle(epaisseur, "Toit-terrasse", "ROOF", nom_materiau))
     origine = Matrix.Translation((points[0][0], points[0][1], z + depart))
@@ -673,6 +706,8 @@ class TRAME_OT_reglages_toit(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operato
         description="Hauteur du bas du toit au-dessus de l'étage (en général, la hauteur des murs)",
     )
     materiau: bpy.props.StringProperty(name="Matériau", default="Béton")
+    debord: bpy.props.FloatProperty(name="Débord", unit="LENGTH", default=0.40, min=0, max=3,
+                                    description="Dépassement du toit au-delà du contour tracé")
 
     def invoke(self, context, event):
         self.preparer_materiau()
@@ -688,11 +723,40 @@ class TRAME_OT_reglages_toit(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operato
             col.prop(self, "choix_materiau")
         col.prop(self, "epaisseur")
         col.prop(self, "depart")
+        col.prop(self, "debord")
 
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
-        creer_toit(pts, self.z, self.forme, self.pente, self.epaisseur, self.depart, self.materiau)
+        creer_toit(pts, self.z, self.forme, self.pente, self.epaisseur, self.depart, self.materiau, self.debord)
         apres_creation()
+        return {"FINISHED"}
+
+
+class TRAME_OT_sur_les_murs(bpy.types.Operator):
+    bl_idname = "bim.trame_sur_les_murs"
+    bl_label = "Sur les murs"
+    bl_description = "Toit ou dalle sur le contour extérieur des murs de l'étage, sans le redessiner"
+    bl_options = {"REGISTER"}
+    element: bpy.props.EnumProperty(items=(("TOIT", "Toit", ""), ("DALLE", "Dalle", "")))
+
+    @classmethod
+    def poll(cls, context):
+        return tool.Ifc.get() is not None
+
+    def execute(self, context):
+        z = niveau_etage()
+        contour = contour_des_murs(z)
+        if not contour:
+            self.report({"WARNING"}, "Aucun mur sur cet étage")
+            return {"CANCELLED"}
+        texte = ";".join(f"{x:.6f},{y:.6f}" for x, y in contour)
+        if self.element == "TOIT":
+            # Le toit part du haut des murs de l'étage.
+            hauts = [o.dimensions.z for e in ifcopenshell.util.element.get_decomposition(tool.Root.get_default_container())
+                     if e.is_a("IfcWall") and (o := tool.Ifc.get_object(e))]
+            bpy.ops.bim.trame_reglages_toit("INVOKE_DEFAULT", points=texte, z=z, depart=max(hauts, default=2.5))
+        else:
+            bpy.ops.bim.trame_reglages_dalle("INVOKE_DEFAULT", points=texte, z=z)
         return {"FINISHED"}
 
 

@@ -84,17 +84,17 @@ assert ue.get_type(poteau).Name == "Poteau 25 × 40 béton"
 assert sorted(round(v, 2) for v in po.dimensions) == [0.25, 0.4, 2.7] and tuple(round(v, 2) for v in po.location[:2]) == (3, 4)
 
 # Toits : deux pans sur 10 × 6 (pignons sur les petits côtés), quatre pans, un pan, terrasse.
-bpy.ops.bim.trame_reglages_toit(points="0,20;10,20;10,26;0,26", z=0, forme="DEUX_PANS", pente=35, epaisseur=0.25, depart=2.5)
+bpy.ops.bim.trame_reglages_toit(points="0,20;10,20;10,26;0,26", z=0, forme="DEUX_PANS", pente=35, epaisseur=0.25, depart=2.5, debord=0)
 toits = f.by_type("IfcRoof")
 assert len(toits) == 1 and toits[0].PredefinedType == "GABLE_ROOF"
 to = tool.Ifc.get_object(toits[0])
 assert tuple(round(v, 1) for v in to.dimensions[:2]) == (10, 6) and round(to.location.z, 2) == 2.5
 assert 2.0 < to.dimensions.z < 2.6, to.dimensions  # 3 m × tan 35° + épaisseur
-bpy.ops.bim.trame_reglages_toit(points="0,30;10,30;10,36;0,36", z=0, forme="QUATRE_PANS", pente=30, epaisseur=0.2, depart=2.5)
+bpy.ops.bim.trame_reglages_toit(points="0,30;10,30;10,36;0,36", z=0, forme="QUATRE_PANS", pente=30, epaisseur=0.2, depart=2.5, debord=0)
 assert [r.PredefinedType for r in f.by_type("IfcRoof")] == ["GABLE_ROOF", "HIP_ROOF"]
-bpy.ops.bim.trame_reglages_toit(points="0,40;6,40;6,44;0,44", z=0, forme="UN_PAN", pente=15, epaisseur=0.2, depart=2.5)
+bpy.ops.bim.trame_reglages_toit(points="0,40;6,40;6,44;0,44", z=0, forme="UN_PAN", pente=15, epaisseur=0.2, depart=2.5, debord=0)
 assert len(f.by_type("IfcRoof")) == 3
-bpy.ops.bim.trame_reglages_toit(points="0,50;6,50;6,54;0,54", z=0, forme="PLAT", epaisseur=0.3, depart=2.5)
+bpy.ops.bim.trame_reglages_toit(points="0,50;6,50;6,54;0,54", z=0, forme="PLAT", epaisseur=0.3, depart=2.5, debord=0)
 assert any(ue.get_type(s_).Name == "Toit-terrasse 30 cm béton" for s_ in f.by_type("IfcSlab"))
 
 # Escalier : de (2,60) vers (6,60), 1 m de large, 2,70 m en 16 marches, centré sur la ligne.
@@ -202,4 +202,23 @@ assert len(contours) == 4, len(contours)
 assert any(sorted((round(p.x, 2), round(p.y, 2)) for p in c) == [(0, 20), (0, 26), (10, 20), (10, 26)] for c in contours)
 tirets = pointilles([V((0, 0, 0)), V((1, 0, 0)), V((1, 1, 0)), V((0, 1, 0))], 0, tiret=0.25, vide=0.15)
 assert len(tirets) == 12 and all((b - a).length <= 0.2500001 for a, b in tirets)
+# Toiture : débord et toit sur le contour des murs.
+from trame.bim.module.model.trame_outils import decaler_contour, contour_des_murs
+import math
+grand = decaler_contour([(0, 0), (4, 0), (4, 3), (0, 3)], 0.5)
+assert sorted((round(x, 6), round(y, 6)) for x, y in grand) == [(-0.5, -0.5), (-0.5, 3.5), (4.5, -0.5), (4.5, 3.5)]
+activer_etage(r1)
+bpy.ops.bim.trame_reglages_mur(points="20,70;28,70;28,76;20,76;20,70", z=2.8, epaisseur=0.3, hauteur=2.5)
+contour = contour_des_murs(2.8)
+xs, ys = [p[0] for p in contour], [p[1] for p in contour]
+assert (round(min(xs), 2), round(max(xs), 2), round(min(ys), 2), round(max(ys), 2)) == (20, 28, 70, 76), contour
+nb_toits = len(f.by_type("IfcRoof"))
+bpy.ops.bim.trame_reglages_toit(points=";".join(f"{x},{y}" for x, y in contour), z=2.8, forme="DEUX_PANS", pente=30,
+                                epaisseur=0.2, depart=2.5, debord=0.5)
+toit = max(f.by_type("IfcRoof"), key=lambda r: r.id())
+assert len(f.by_type("IfcRoof")) == nb_toits + 1
+ot = tool.Ifc.get_object(toit)
+assert tuple(round(v, 2) for v in ot.dimensions[:2]) == (9, 7), ot.dimensions
+assert round(ot.location.z, 3) == round(2.8 + 2.5 - 0.5 * math.tan(math.radians(30)), 3), ot.location.z
+activer_etage(etages()[-1][0])
 print("TEST OUTILS OK")

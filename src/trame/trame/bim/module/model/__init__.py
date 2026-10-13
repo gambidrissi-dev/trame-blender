@@ -101,6 +101,7 @@ classes = (
     trame_outils.TRAME_OT_poser_poteau,
     trame_outils.TRAME_OT_reglages_toit,
     trame_outils.TRAME_OT_reglages_escalier,
+    trame_outils.TRAME_OT_sur_les_murs,
     trame_outils.TRAME_OT_reglages_coupe,
     trame_outils.TRAME_OT_creer_cote,
     trame_materiaux.TRAME_OT_creer_materiau,

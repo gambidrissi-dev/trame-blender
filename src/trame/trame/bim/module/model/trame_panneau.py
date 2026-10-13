@@ -266,6 +266,10 @@ class TRAME_PT_panneau(bpy.types.Panel):
         for idname, nom, icone in OUTILS:
             grille.operator("wm.tool_set_by_id", text=nom, icon=icone, depress=idname == actif).name = idname
 
+        ligne = layout.row(align=True)
+        ligne.operator("bim.trame_sur_les_murs", text="Toit sur les murs", icon="MOD_TRIANGULATE").element = "TOIT"
+        ligne.operator("bim.trame_sur_les_murs", text="Dalle sur les murs", icon="MESH_PLANE").element = "DALLE"
+
         layout.separator()
         layout.label(text="Étages")
         courant = tool.Root.get_default_container()
