@@ -18,6 +18,9 @@ def calque_pour(element) -> str:
         type_ = ifcopenshell.util.element.get_type(element) or element
         epaisseur = tool.Model.get_material_layer_parameters(type_)["thickness"] or 0
         return "Cloisons" if 0 < epaisseur < EPAISSEUR_CLOISON else "Murs"
+    if element.is_a("IfcSlab") and "LANDING" in (element.PredefinedType, getattr(
+            ifcopenshell.util.element.get_type(element), "PredefinedType", None)):
+        return "Escaliers"
     if element.is_a("IfcSlab"):
         return "Toiture" if element.PredefinedType == "ROOF" or getattr(
             ifcopenshell.util.element.get_type(element), "PredefinedType", None) == "ROOF" else "Dalles"

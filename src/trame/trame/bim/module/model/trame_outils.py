@@ -18,6 +18,7 @@ from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix, Vector
 
 import trame.tool as tool
+import trame.core.aggregate
 import trame.core.geometry
 import trame.core.root
 from trame.bim.module.model import roof as bonsai_toit
@@ -217,7 +218,12 @@ def creer_dalle(points: list, z: float, epaisseur: float, type_=None, nom_materi
     gen.polyline = [(p[0] - points[0][0], p[1] - points[0][1], 0.0) for p in points]
     if gen.polyline[0] != gen.polyline[-1]:
         gen.polyline.append(gen.polyline[0])  # une dalle est toujours fermée
-    return gen.create_slab()
+    obj = gen.create_slab()
+    if abs(obj.location.z - z) > 1e-6:
+        # Bonsai pose toute dalle au niveau de l'étage : on la remonte (toit-terrasse, palier).
+        obj.location.z = z
+        trame.core.geometry.edit_object_placement(tool.Ifc, tool.Geometry, tool.Surveyor, obj=obj)
+    return obj
 
 
 def creer_ouverture(
@@ -402,6 +408,55 @@ def creer_escalier(depart, arrivee, z: float, largeur: float, hauteur: float, ma
     return bpy.context.active_object
 
 
+FORMES_ESCALIER = (
+    ("DROIT", "Droit", "Une seule volée"),
+    ("L_GAUCHE", "Quart tournant à gauche", "Deux volées en L, palier carré"),
+    ("L_DROITE", "Quart tournant à droite", "Deux volées en L, palier carré"),
+    ("U_GAUCHE", "Demi-tournant à gauche", "Deux volées en U, palier sur toute la largeur"),
+    ("U_DROITE", "Demi-tournant à droite", "Deux volées en U, palier sur toute la largeur"),
+)
+EPAISSEUR_PALIER = 0.20
+
+
+def creer_escalier_forme(depart, arrivee, z: float, largeur: float, hauteur: float, marches: int, forme: str):
+    """Escalier droit, en L ou en U : la 1re volée suit la ligne cliquée, le palier est à mi-hauteur.
+
+    Les volées et le palier sont regroupés dans un IfcStair (un seul escalier pour l'archi)."""
+    if forme == "DROIT":
+        return [creer_escalier(depart, arrivee, z, largeur, hauteur, marches)]
+    a = Vector((depart[0], depart[1], 0))
+    d = Vector((arrivee[0], arrivee[1], 0)) - a
+    u = d.normalized()
+    sens = 1 if forme.endswith("GAUCHE") else -1
+    v = Vector((-u.y, u.x, 0)) * sens  # côté où tourne l'escalier
+    n1 = marches // 2
+    n2 = marches - n1
+    h1 = hauteur * n1 / marches
+    giron = d.length / n1
+    w = largeur
+    p = a + d  # fin de la 1re volée, sur sa ligne de marche
+    volee1 = creer_escalier(a, p, z, w, h1, n1)
+    if forme.startswith("L"):
+        palier = [p - v * w / 2, p + v * w / 2, p + v * w / 2 + u * w, p - v * w / 2 + u * w]
+        depart2 = p + u * w / 2 + v * w / 2
+        direction2 = v
+    else:  # U : le palier couvre les deux volées, la 2e redescend le long de la 1re
+        palier = [p - v * w / 2, p + v * w * 1.5, p + v * w * 1.5 + u * w, p - v * w / 2 + u * w]
+        depart2 = p + v * w
+        direction2 = -u
+    dalle = creer_dalle([(q.x, q.y) for q in palier], z + h1 - EPAISSEUR_PALIER, EPAISSEUR_PALIER,  # dessus à mi-hauteur
+                        type_de_dalle(EPAISSEUR_PALIER, "Palier", "LANDING"))
+    fin2 = depart2 + direction2 * giron * n2
+    volee2 = creer_escalier(depart2, fin2, z + h1, w, hauteur - h1, n2)
+    # Un seul escalier IFC qui regroupe volées et palier.
+    escalier = objet_ifc("Escalier", "IfcStair", Matrix.Translation((a.x, a.y, z)), avec_maillage=False)
+    for partie in (volee1, dalle, volee2):
+        trame.core.aggregate.assign_object(
+            tool.Ifc, tool.Aggregate, tool.Collector, relating_obj=escalier, related_obj=partie
+        )
+    return [volee1, dalle, volee2]
+
+
 def creer_coupe(depart, arrivee, nom: str, profondeur: float):
     """Vue en coupe de Bonsai sur la ligne cliquée, qui regarde vers la gauche du tracé."""
     a, b = Vector((depart[0], depart[1], 0)), Vector((arrivee[0], arrivee[1], 0))
@@ -557,7 +612,8 @@ class TRAME_OT_reglages_dalle(_AvecMateriau, bpy.types.Operator, tool.Ifc.Operat
 
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
-        creer_dalle(pts, self.z, self.epaisseur, nom_materiau=self.materiau)
+        # Comme Archicad : le dessus de la dalle est au niveau de l'étage, elle pend en dessous.
+        creer_dalle(pts, self.z - self.epaisseur, self.epaisseur, nom_materiau=self.materiau)
         apres_creation()
         return {"FINISHED"}
 
@@ -771,6 +827,7 @@ class TRAME_OT_reglages_escalier(bpy.types.Operator, tool.Ifc.Operator):
     largeur: bpy.props.FloatProperty(name="Largeur", unit="LENGTH", default=1.0, min=0.5, max=5)
     hauteur: bpy.props.FloatProperty(name="Hauteur à monter", unit="LENGTH", default=2.70, min=0.2, max=10)
     marches: bpy.props.IntProperty(name="Nombre de marches", default=16, min=2, max=60)
+    forme: bpy.props.EnumProperty(name="Forme", items=FORMES_ESCALIER, default="DROIT")
 
     def invoke(self, context, event):
         if hauteur := hauteur_etage_courant():
@@ -781,15 +838,16 @@ class TRAME_OT_reglages_escalier(bpy.types.Operator, tool.Ifc.Operator):
     def draw(self, context):
         col = self.layout.column()
         col.use_property_split = True
-        for prop in ("largeur", "hauteur", "marches"):
+        for prop in ("forme", "largeur", "hauteur", "marches"):
             col.prop(self, prop)
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
         longueur = (Vector(pts[1]) - Vector(pts[0])).length
-        col.label(text=f"Marche : {self.hauteur / self.marches * 100:.1f} cm de haut, {longueur / self.marches * 100:.1f} cm de giron")
+        volee = self.marches if self.forme == "DROIT" else self.marches // 2
+        col.label(text=f"Marche : {self.hauteur / self.marches * 100:.1f} cm de haut, {longueur / volee * 100:.1f} cm de giron")
 
     def _execute(self, context):
         pts = [tuple(map(float, p.split(","))) for p in self.points.split(";") if p]
-        creer_escalier(pts[0], pts[1], self.z, self.largeur, self.hauteur, self.marches)
+        creer_escalier_forme(pts[0], pts[1], self.z, self.largeur, self.hauteur, self.marches, self.forme)
         apres_creation()
         return {"FINISHED"}
 

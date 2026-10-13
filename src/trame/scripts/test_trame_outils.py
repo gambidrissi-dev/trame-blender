@@ -221,4 +221,35 @@ ot = tool.Ifc.get_object(toit)
 assert tuple(round(v, 2) for v in ot.dimensions[:2]) == (9, 7), ot.dimensions
 assert round(ot.location.z, 3) == round(2.8 + 2.5 - 0.5 * math.tan(math.radians(30)), 3), ot.location.z
 activer_etage(etages()[-1][0])
+# Hauteurs des dalles : dessus de la dalle au niveau de l'étage ; toit-terrasse posé sur les murs.
+def z_bornes(o):
+    bb = [o.matrix_world @ V(c) for c in o.bound_box]
+    return round(min(v.z for v in bb), 3), round(max(v.z for v in bb), 3)
+assert z_bornes(tool.Ifc.get_object(dalle)) == (-0.25, 0.0), z_bornes(tool.Ifc.get_object(dalle))
+terrasse = next(s_ for s_ in f.by_type("IfcSlab") if ue.get_type(s_).Name.startswith("Toit-terrasse"))
+assert z_bornes(tool.Ifc.get_object(terrasse)) == (2.5, 2.8)
+
+# Escaliers en L et en U : 2 volées + palier à mi-hauteur, regroupés dans un IfcStair, sur le calque Escaliers.
+from trame.bim.module.model.trame_calques import calque_de
+for forme, attendu_x, attendu_y in (("L_GAUCHE", None, None), ("U_DROITE", None, None)):
+    avant_volees = set(f.by_type("IfcStairFlight"))
+    bpy.ops.bim.trame_reglages_escalier(points="40,0;43,0", z=0, largeur=1.0, hauteur=2.8, marches=16, forme=forme)
+    volees = sorted(set(f.by_type("IfcStairFlight")) - avant_volees, key=lambda e: e.id())
+    assert len(volees) == 2
+    escalier = ue.get_aggregate(volees[0])
+    assert escalier and escalier.is_a("IfcStair") and ue.get_aggregate(volees[1]) == escalier
+    parties = ue.get_parts(escalier)
+    (palier,) = [p_ for p_ in parties if p_.is_a("IfcSlab")]
+    assert z_bornes(tool.Ifc.get_object(palier))[1] == 1.4  # dessus du palier à mi-hauteur (8 marches sur 16)
+    assert calque_de(palier).Name == "Escaliers" and calque_de(volees[0]).Name == "Escaliers"
+    hauts = [z_bornes(tool.Ifc.get_object(v_))[1] for v_ in volees]
+    assert hauts == [1.4, 2.8], hauts
+    o2 = tool.Ifc.get_object(volees[1])
+    regard2 = o2.matrix_world.to_3x3() @ V((1, 0, 0))
+    if forme == "L_GAUCHE":
+        assert tuple(round(c, 3) for c in regard2) == (0, 1, 0), regard2  # la 2e volée part vers la gauche (+Y)
+    else:
+        assert tuple(round(c, 3) for c in regard2) == (-1, 0, 0), regard2  # demi-tour
+        bb2 = [o2.matrix_world @ V(c) for c in o2.bound_box]
+        assert max(v.y for v in bb2) <= -0.49, "en U à droite, la 2e volée est du côté droit (-Y)"
 print("TEST OUTILS OK")
