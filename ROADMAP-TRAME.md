@@ -46,7 +46,7 @@ Et un démarrage réel de Blender montre l'écran Trame prêt à dessiner.
 | 22 | Velux : fenêtre de toit posée dans le pan, toit percé | fait |
 | 23 | Terrain : maillage à partir de points cotés (triangulation), en IFC | fait |
 | 24 | IA : assistant Trame qui construit à partir d'une demande en français (API Claude) || fait |
-| 25 | Tests de bout en bout étendus + publication | |
+| 25 | Tests de bout en bout étendus + publication | fait |
 
 ## Hors périmètre
 Nomenclatures, mise en page de planches.
