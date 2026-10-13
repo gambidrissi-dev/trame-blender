@@ -17,6 +17,7 @@ B=/Applications/Blender.app/Contents/MacOS/Blender
 $B -b --python src/trame/scripts/precheck.py 2>&1 | grep -q "PRECHECK OK" || { echo "Vérification préalable en échec"; exit 1; }
 $B -b --python src/trame/scripts/test_trame_outils.py 2>&1 | grep -q "TEST OUTILS OK" || { echo "Tests des outils en échec"; exit 1; }
 $B -b --python src/trame/scripts/test_trame_maison.py 2>&1 | grep -q "TEST MAISON OK" || { echo "Test maison R+1 en échec"; exit 1; }
+$B -b --python src/trame/scripts/test_trame_assistant.py 2>&1 | grep -q "TEST ASSISTANT OK" || { echo "Test assistant en échec"; exit 1; }
 
 echo $V > src/trame/VERSION
 rm -rf src/trame/build src/trame/dist

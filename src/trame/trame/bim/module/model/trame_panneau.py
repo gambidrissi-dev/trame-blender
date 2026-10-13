@@ -274,6 +274,20 @@ class TRAME_PT_panneau(bpy.types.Panel):
         layout.operator("bim.trame_importer_releve", text="Importer un relevé (points x y z)", icon="IMPORT")
 
         layout.separator()
+        layout.label(text="Assistant IA")
+        from trame.bim.module.model.trame_assistant import _Etat
+
+        boite = layout.box().column(align=True)
+        for ligne in _Etat.lignes[-6:]:
+            boite.label(text=ligne[:90])
+        if _Etat.en_cours:
+            boite.label(text="L'assistant travaille…", icon="SORTTIME")
+        layout.prop(context.window_manager, "trame_demande", text="")
+        ligne = layout.row(align=True)
+        ligne.operator("bim.trame_assistant", text="Envoyer", icon="PLAY")
+        ligne.operator("bim.trame_nouvelle_conversation", text="", icon="TRASH")
+
+        layout.separator()
         layout.label(text="Étages")
         courant = tool.Root.get_default_container()
         col = layout.column(align=True)

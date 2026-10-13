@@ -44,6 +44,7 @@ from . import (
     trame_materiaux,
     trame_calques,
     trame_terrain,
+    trame_assistant,
     prop,
     railing,
     roof,
@@ -107,6 +108,8 @@ classes = (
     trame_outils.TRAME_OT_poser_velux,
     trame_terrain.TRAME_OT_reglages_terrain,
     trame_terrain.TRAME_OT_importer_releve,
+    trame_assistant.TRAME_OT_assistant,
+    trame_assistant.TRAME_OT_nouvelle_conversation,
     trame_outils.TRAME_OT_reglages_coupe,
     trame_outils.TRAME_OT_creer_cote,
     trame_materiaux.TRAME_OT_creer_materiau,
@@ -407,6 +410,9 @@ def register():
     workspace.load_custom_icons()
     trame_plan.installer()  # cotes et murs hachurés dans la vue en plan
     bpy.app.handlers.depsgraph_update_post.append(trame_panneau.suivre_nouveaux_objets)
+    bpy.types.WindowManager.trame_demande = bpy.props.StringProperty(
+        name="Demande", description="Ce que l'assistant doit construire ou modifier, en français"
+    )
     bpy.types.Scene.trame_calque_fond = bpy.props.BoolProperty(
         name="Étage du dessous", default=True, description="Montrer en gris les murs de l'étage du dessous"
     )
@@ -422,6 +428,7 @@ def unregister():
     if trame_panneau.suivre_nouveaux_objets in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(trame_panneau.suivre_nouveaux_objets)
     del bpy.types.Scene.trame_calque_fond
+    del bpy.types.WindowManager.trame_demande
 
     # Network path overlays attach SpaceView3D draw handlers on toggle;
     # uninstall here so addon disable / Blender shutdown doesn't leak them.

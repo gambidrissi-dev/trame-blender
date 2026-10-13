@@ -469,6 +469,11 @@ class BIM_ADDON_preferences(bpy.types.AddonPreferences):
             "It is recommended to keep this `Enabled`"
         ),
     )
+    trame_cle_api: StringProperty(
+        name="Clé d'API Claude",
+        subtype="PASSWORD",
+        description="Pour l'assistant IA de Trame. Vide : la variable ANTHROPIC_API_KEY ou un profil « ant auth login » est utilisé",
+    )
     langue_fr_reglee: BoolProperty(
         name="Langue française déjà réglée",
         description="Trame passe Blender en français une seule fois ; on peut ensuite revenir à une autre langue",

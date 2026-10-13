@@ -128,6 +128,8 @@ BUNDLED_WHEELS += six
 BUNDLED_WHEELS += lxml
 # Required by drawing module for markdown hyperlinks in annotations
 BUNDLED_WHEELS += markdown-it-py
+# Trame : assistant IA (SDK officiel de l'API Claude)
+BUNDLED_WHEELS += anthropic
 BUNDLED_WHEELS += mdurl
 # Required by qto and drawing module
 BUNDLED_WHEELS += shapely
