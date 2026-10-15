@@ -90,17 +90,20 @@ def extremites_murs(z: float) -> list:
 def mur_sous_point(point: Vector, z: float):
     """Mur le plus proche du point cliqué (à son épaisseur près) : (mur, distance depuis le début de l'axe)."""
     meilleur = None
+    point = Vector((point.x, point.y))
     for mur in tool.Ifc.get().by_type("IfcWall"):
-        if not (axe := axe_mur(mur, z)):
+        couches = tool.Model.get_material_layer_parameters(ifcopenshell.util.element.get_type(mur) or mur)
+        if not (obj := tool.Ifc.get_object(mur)) or not couches["thickness"]:
             continue
-        a, b = axe
+        # L'axe IFC longe une face : on mesure depuis la ligne médiane, entre les deux faces du mur.
+        faces = tool.Model.get_wall_axis(obj, layers=couches)
+        a, b = ((Vector(p).to_2d() + Vector(q).to_2d()) / 2 for p, q in zip(faces["base"], faces["side"]))
         d = b - a
         if d.length < 1e-6:
             continue
         t = max(0.0, min(1.0, (point - a).dot(d) / d.length_squared))
         ecart = (a + d * t - point).length
-        epaisseur = tool.Model.get_material_layer_parameters(ifcopenshell.util.element.get_type(mur) or mur)["thickness"]
-        if ecart <= (epaisseur or 0.3) / 2 + 0.15 and (meilleur is None or ecart < meilleur[2]):
+        if ecart <= couches["thickness"] / 2 + 0.15 and (meilleur is None or ecart < meilleur[2]):
             meilleur = (mur, t * d.length, ecart)
     return meilleur[:2] if meilleur else None
 
@@ -747,9 +750,16 @@ class TRAME_OT_poser_ouverture(bpy.types.Operator):
     def invoke(self, context, event):
         z = niveau_etage()
         point = point_sous_souris(context, event, z)
+        # En 3D, le clic sur la face d'un mur se projette derrière lui au sol : on vise d'abord l'objet touché.
+        region, rv3d, coord = context.region, context.region_data, (event.mouse_region_x, event.mouse_region_y)
+        touche, impact, _, _, obj, _ = context.scene.ray_cast(
+            context.evaluated_depsgraph_get(), view3d_utils.region_2d_to_origin_3d(region, rv3d, coord),
+            view3d_utils.region_2d_to_vector_3d(region, rv3d, coord))
+        if touche and (element := tool.Ifc.get_entity(obj)) and element.is_a("IfcWall"):
+            point = Vector((impact.x, impact.y, z))
         trouve = point and mur_sous_point(point, z)
         if not trouve:
-            self.report({"WARNING"}, "Cliquez sur un mur pour y poser l'ouverture")
+            self.report({"WARNING"}, "Pas de mur sous la souris : cliquez sur un mur pour y poser l'ouverture")
             return {"CANCELLED"}
         mur, position = trouve
         dialogue = bpy.ops.bim.trame_reglages_porte if self.element == "PORTE" else bpy.ops.bim.trame_reglages_fenetre
